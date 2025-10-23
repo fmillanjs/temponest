@@ -1,0 +1,15 @@
+{
+  "name": "@temponest/types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared TypeScript types and interfaces",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "clean": "rm -rf .turbo node_modules dist"
+  },
+  "devDependencies": {
+    "@temponest/typescript-config": "workspace:*",
+    "typescript": "^5.3.3"
+  }
+}

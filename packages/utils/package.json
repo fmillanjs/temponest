@@ -1,0 +1,19 @@
+{
+  "name": "@temponest/utils",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared utility functions",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "clean": "rm -rf .turbo node_modules dist"
+  },
+  "dependencies": {
+    "clsx": "^2.1.0",
+    "tailwind-merge": "^2.2.1"
+  },
+  "devDependencies": {
+    "@temponest/typescript-config": "workspace:*",
+    "typescript": "^5.3.3"
+  }
+}

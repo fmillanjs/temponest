@@ -1,10 +1,36 @@
-Dockerfile
-.dockerignore
-node_modules
-npm-debug.log
-README.md
-.env
-.git
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+.next/
+.turbo/
+dist/
+build/
+out/
+
+# Development files
+.git/
 .gitignore
-.next
-.cache
+*.md
+!README.md
+
+# Environment files
+.env*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Misc
+.DS_Store
+*.pem

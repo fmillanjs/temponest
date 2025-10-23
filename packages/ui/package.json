@@ -1,0 +1,29 @@
+{
+  "name": "@temponest/ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared UI components with shadcn/ui",
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "scripts": {
+    "clean": "rm -rf .turbo node_modules dist"
+  },
+  "dependencies": {
+    "@temponest/utils": "workspace:*",
+    "@radix-ui/react-slot": "^1.0.2",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "lucide-react": "^0.323.0",
+    "react": "^18.2.0",
+    "tailwind-merge": "^2.2.1"
+  },
+  "devDependencies": {
+    "@temponest/tailwind-config": "workspace:*",
+    "@temponest/typescript-config": "workspace:*",
+    "@types/react": "^18.2.55",
+    "typescript": "^5.3.3"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "name": "temponest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Enterprise-grade SaaS Project Generator Platform",
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=web",
+    "dev:admin": "turbo run dev --filter=admin",
+    "dev:workers": "turbo run dev --filter=workers",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json,yml,yaml}\"",
+    "type-check": "turbo run type-check",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "db:generate": "pnpm --filter=@temponest/database db:generate",
+    "db:push": "pnpm --filter=@temponest/database db:push",
+    "db:migrate": "pnpm --filter=@temponest/database db:migrate",
+    "db:migrate:deploy": "pnpm --filter=@temponest/database db:migrate:deploy",
+    "db:seed": "pnpm --filter=@temponest/database db:seed",
+    "db:studio": "pnpm --filter=@temponest/database db:studio",
+    "docker:dev": "docker compose -f docker-compose.dev.yml up",
+    "docker:dev:build": "docker compose -f docker-compose.dev.yml up --build",
+    "docker:dev:down": "docker compose -f docker-compose.dev.yml down",
+    "docker:dev:clean": "docker compose -f docker-compose.dev.yml down -v",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.1",
+    "@commitlint/cli": "^19.0.3",
+    "@commitlint/config-conventional": "^19.0.3",
+    "@types/node": "^20.11.20",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.2",
+    "prettier": "^3.2.5",
+    "turbo": "^1.12.5",
+    "typescript": "^5.3.3"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}
