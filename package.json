@@ -22,10 +22,11 @@
     "db:migrate:deploy": "pnpm --filter=@temponest/database db:migrate:deploy",
     "db:seed": "pnpm --filter=@temponest/database db:seed",
     "db:studio": "pnpm --filter=@temponest/database db:studio",
-    "docker:dev": "docker compose -f docker-compose.dev.yml up",
-    "docker:dev:build": "docker compose -f docker-compose.dev.yml up --build",
-    "docker:dev:down": "docker compose -f docker-compose.dev.yml down",
-    "docker:dev:clean": "docker compose -f docker-compose.dev.yml down -v",
+    "docker:dev": "docker compose -f docker-compose.simple.yml up -d",
+    "docker:dev:full": "docker compose -f docker-compose.dev.yml up -d",
+    "docker:dev:build": "docker compose -f docker-compose.simple.yml up --build -d",
+    "docker:dev:down": "docker compose -f docker-compose.simple.yml down",
+    "docker:dev:clean": "docker compose -f docker-compose.simple.yml down -v",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -43,5 +44,10 @@
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": "0.19.11"
+    }
   }
 }

@@ -1,22 +1,12 @@
 # ============================================
-# TempoNest Local Development Environment
+# TempoNest - Simplified Development Environment
 # ============================================
 #
-# Value Propositions:
-# - Complete local development environment in one command
-# - Includes all infrastructure services (DB, Redis, Analytics, Email)
-# - Hot reload for rapid development
-# - Observability with Plausible Analytics
-# - Email testing with MailHog
-# - S3-compatible storage with MinIO
+# This version excludes Plausible Analytics for faster startup
+# and better stability on constrained environments.
 #
-# Usage:
-#   pnpm docker:dev       - Start all services
-#   pnpm docker:dev:down  - Stop all services
-#   pnpm docker:dev:clean - Stop and remove volumes (clean slate)
+# Includes: PostgreSQL, Redis, MailHog, MinIO
 # ============================================
-
-version: '3.8'
 
 services:
   # ============================================
@@ -60,80 +50,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-    networks:
-      - temponest-network
-
-  # ============================================
-  # Plausible Analytics - Self-Hosted Analytics
-  # ============================================
-
-  # Plausible PostgreSQL Database
-  plausible-db:
-    image: postgres:16-alpine
-    container_name: temponest-plausible-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: plausible
-      POSTGRES_PASSWORD: plausible
-      POSTGRES_DB: plausible
-    volumes:
-      - plausible-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U plausible']
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - temponest-network
-
-  # Plausible ClickHouse Database (for events)
-  plausible-events:
-    image: clickhouse/clickhouse-server:23.11.2.11-alpine
-    container_name: temponest-plausible-events
-    restart: unless-stopped
-    volumes:
-      - plausible-events-data:/var/lib/clickhouse
-      - ./scripts/clickhouse-config.xml:/etc/clickhouse-server/config.d/logging.xml:ro
-      - ./scripts/clickhouse-user-config.xml:/etc/clickhouse-server/users.d/logging.xml:ro
-      - ./scripts/clickhouse-ipv4-config.xml:/etc/clickhouse-server/config.d/ipv4.xml:ro
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    healthcheck:
-      test: ['CMD', 'wget', '--spider', '-q', 'localhost:8123/ping']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - temponest-network
-
-  # Plausible Analytics App
-  plausible:
-    image: plausible/analytics:v2.0
-    container_name: temponest-plausible
-    restart: unless-stopped
-    command: sh -c "sleep 10 && /entrypoint.sh db createdb && /entrypoint.sh db migrate && /entrypoint.sh run"
-    depends_on:
-      plausible-db:
-        condition: service_healthy
-      plausible-events:
-        condition: service_healthy
-    ports:
-      - '8000:8000'
-    environment:
-      BASE_URL: http://localhost:8000
-      SECRET_KEY_BASE: 'replace-me-with-a-real-secret-in-production-min-64-chars-long-bXFhYnNkZmphc2RmanNka2Zqc2RrbGZqc2tsamRmbGtzamRmbGtzamRsa2ZqcyE='
-      DATABASE_URL: postgres://plausible:plausible@plausible-db:5432/plausible
-      CLICKHOUSE_DATABASE_URL: http://plausible-events:8123/plausible
-      DISABLE_REGISTRATION: 'invite_only'
-      MAILER_EMAIL: admin@temponest.local
-      SMTP_HOST_ADDR: mailhog
-      SMTP_HOST_PORT: 1025
-      SMTP_USER_NAME: ''
-      SMTP_USER_PWD: ''
-      SMTP_HOST_SSL_ENABLED: 'false'
-      SMTP_RETRIES: 2
     networks:
       - temponest-network
 
@@ -201,10 +117,6 @@ volumes:
   postgres-data:
     driver: local
   redis-data:
-    driver: local
-  plausible-db-data:
-    driver: local
-  plausible-events-data:
     driver: local
   minio-data:
     driver: local
