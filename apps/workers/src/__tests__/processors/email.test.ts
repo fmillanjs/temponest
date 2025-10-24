@@ -21,26 +21,50 @@ const mockResendSend = jest.fn()
 const mockSendMail = jest.fn()
 const mockRender = jest.fn().mockReturnValue('<html>Email content</html>')
 
+// Mock Worker to prevent Redis connection
+const mockWorkerClose = jest.fn().mockResolvedValue(undefined)
+const mockWorkerOn = jest.fn()
+
+jest.mock('bullmq', () => ({
+  ...jest.requireActual('bullmq'),
+  Worker: jest.fn().mockImplementation(() => ({
+    close: mockWorkerClose,
+    on: mockWorkerOn,
+  })),
+}))
+
 jest.mock('../../config', () => ({
   redis: {},
   config: mockConfig,
 }))
 
-// Mock email templates with full path to avoid module mapper issues
-jest.mock('../../../../../packages/email/src/templates/verification', () => ({
+// Mock email templates with proper path resolution
+jest.mock('@temponest/email/templates/verification', () => ({
   VerificationEmail: jest.fn(() => 'VerificationEmail'),
 }))
 
-jest.mock('../../../../../packages/email/src/templates/password-reset', () => ({
+jest.mock('@temponest/email/templates/password-reset', () => ({
   PasswordResetEmail: jest.fn(() => 'PasswordResetEmail'),
 }))
 
-jest.mock('../../../../../packages/email/src/templates/password-changed', () => ({
+jest.mock('@temponest/email/templates/password-changed', () => ({
   PasswordChangedEmail: jest.fn(() => 'PasswordChangedEmail'),
 }))
 
+// Mock nodemailer for SMTP tests (virtual mock - package not installed)
+jest.mock('nodemailer', () => ({
+  createTransporter: jest.fn(() => ({
+    sendMail: mockSendMail,
+  })),
+}), { virtual: true })
+
+// Mock @react-email/render for SMTP tests (virtual mock - package not installed)
+jest.mock('@react-email/render', () => ({
+  render: mockRender,
+}), { virtual: true })
+
 // Import after all mocks are set up
-const { processEmail } = require('../../processors/email')
+const { processEmail, emailWorker } = require('../../processors/email')
 
 describe('Email Processor', () => {
   let mockJob: Partial<Job<SendEmailJob>>
@@ -74,6 +98,13 @@ describe('Email Processor', () => {
   afterEach(() => {
     consoleLogSpy.mockRestore()
     consoleErrorSpy.mockRestore()
+  })
+
+  afterAll(async () => {
+    // Close the Worker to prevent hanging tests
+    if (emailWorker && emailWorker.close) {
+      await emailWorker.close()
+    }
   })
 
   describe('Development Mode', () => {
@@ -208,21 +239,7 @@ describe('Email Processor', () => {
       mockConfig.email.smtpUser = 'test@example.com'
       mockConfig.email.smtpPassword = 'password123'
       mockSendMail.mockClear()
-
-      // Mock nodemailer and @react-email/render dynamic imports
-      jest.isolateModules(() => {
-        jest.mock('nodemailer', () => ({
-          default: {
-            createTransporter: jest.fn(() => ({
-              sendMail: mockSendMail,
-            })),
-          },
-        }), { virtual: true })
-
-        jest.mock('@react-email/render', () => ({
-          render: mockRender,
-        }), { virtual: true })
-      })
+      mockRender.mockClear()
     })
 
     it('should send email via SMTP when configured', async () => {
@@ -274,6 +291,8 @@ describe('Email Processor', () => {
 
   describe('Template Rendering', () => {
     it('should throw error for unknown template', async () => {
+      // Enable SMTP so template validation actually runs
+      mockConfig.email.smtpHost = 'smtp.example.com'
       mockJob.data!.template = 'unknown-template' as any
 
       await expect(processEmail(mockJob as Job<SendEmailJob>))
@@ -299,7 +318,8 @@ describe('Email Processor', () => {
     })
 
     it('should log errors when email fails', async () => {
-      // Force an error by providing invalid template
+      // Enable SMTP and force an error by providing invalid template
+      mockConfig.email.smtpHost = 'smtp.example.com'
       mockJob.data!.template = null as any
 
       await expect(processEmail(mockJob as Job<SendEmailJob>)).rejects.toThrow()
@@ -317,6 +337,8 @@ describe('Email Processor', () => {
 
   describe('Error Handling', () => {
     it('should rethrow errors after logging', async () => {
+      // Enable SMTP so template validation runs
+      mockConfig.email.smtpHost = 'smtp.example.com'
       mockJob.data!.template = 'invalid' as any
 
       await expect(processEmail(mockJob as Job<SendEmailJob>))

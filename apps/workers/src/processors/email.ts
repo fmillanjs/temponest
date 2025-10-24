@@ -2,11 +2,6 @@ import { Worker, Job } from 'bullmq'
 import { redis, config } from '../config'
 import type { SendEmailJob } from '@temponest/types'
 
-// Import email templates
-import { VerificationEmail } from '@temponest/email/templates/verification'
-import { PasswordResetEmail } from '@temponest/email/templates/password-reset'
-import { PasswordChangedEmail } from '@temponest/email/templates/password-changed'
-
 /**
  * Process email job
  * EXPORTED FOR TESTING - Contains all business logic
@@ -67,7 +62,7 @@ async function sendViaResend(
     const { Resend } = await import('resend')
     const resend = new Resend(config.email.resendApiKey)
 
-    const emailTemplate = getEmailTemplate(template, data)
+    const emailTemplate = await getEmailTemplate(template, data)
 
     await resend.emails.send({
       from: config.email.from,
@@ -99,7 +94,7 @@ async function sendViaSmtp(
     const nodemailer = await import('nodemailer')
     const { render } = await import('@react-email/render')
 
-    const transporter = nodemailer.default.createTransporter({
+    const transporter = nodemailer.createTransporter({
       host: config.email.smtpHost,
       port: config.email.smtpPort || 587,
       secure: config.email.smtpSecure || false,
@@ -109,7 +104,7 @@ async function sendViaSmtp(
       },
     })
 
-    const emailTemplate = getEmailTemplate(template, data)
+    const emailTemplate = await getEmailTemplate(template, data)
     const html = render(emailTemplate)
 
     await transporter.sendMail({
@@ -130,32 +125,41 @@ async function sendViaSmtp(
 
 /**
  * Get email template component based on template name
+ * Uses dynamic imports to avoid Jest module resolution issues
  */
-function getEmailTemplate(template: SendEmailJob['template'], data: Record<string, unknown>) {
+async function getEmailTemplate(template: SendEmailJob['template'], data: Record<string, unknown>) {
   switch (template) {
-    case 'verification':
+    case 'verification': {
+      const { VerificationEmail } = await import('@temponest/email/templates/verification')
       return VerificationEmail({
         verificationUrl: data.verificationUrl as string,
         email: data.email as string,
       })
+    }
 
-    case 'password-reset':
+    case 'password-reset': {
+      const { PasswordResetEmail } = await import('@temponest/email/templates/password-reset')
       return PasswordResetEmail({
         resetUrl: data.resetUrl as string,
         email: data.email as string,
       })
+    }
 
-    case 'password-changed':
+    case 'password-changed': {
+      const { PasswordChangedEmail } = await import('@temponest/email/templates/password-changed')
       return PasswordChangedEmail({
         email: data.email as string,
       })
+    }
 
-    case 'invitation':
+    case 'invitation': {
       // TODO: Create invitation email template
+      const { VerificationEmail } = await import('@temponest/email/templates/verification')
       return VerificationEmail({
         verificationUrl: data.inviteUrl as string,
         email: data.email as string,
       })
+    }
 
     default:
       throw new Error(`Unknown email template: ${template}`)
