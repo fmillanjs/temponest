@@ -17,20 +17,8 @@ const mockConfig = {
   },
 }
 
-const mockResend = {
-  emails: {
-    send: jest.fn(),
-  },
-}
-
-const mockNodemailer = {
-  default: {
-    createTransporter: jest.fn(() => ({
-      sendMail: jest.fn(),
-    })),
-  },
-}
-
+const mockResendSend = jest.fn()
+const mockSendMail = jest.fn()
 const mockRender = jest.fn().mockReturnValue('<html>Email content</html>')
 
 jest.mock('../../config', () => ({
@@ -38,20 +26,8 @@ jest.mock('../../config', () => ({
   config: mockConfig,
 }))
 
-// Don't mock optional dependencies at module level
-// They're dynamically imported in the actual code
-
-jest.mock('../../../../../packages/email/src/templates/verification', () => ({
-  VerificationEmail: jest.fn((props) => `VerificationEmail(${props.email})`),
-}))
-
-jest.mock('../../../../../packages/email/src/templates/password-reset', () => ({
-  PasswordResetEmail: jest.fn((props) => `PasswordResetEmail(${props.email})`),
-}))
-
-jest.mock('../../../../../packages/email/src/templates/password-changed', () => ({
-  PasswordChangedEmail: jest.fn((props) => `PasswordChangedEmail(${props.email})`),
-}))
+// Import after all mocks are set up
+const { processEmail } = require('../../processors/email')
 
 describe('Email Processor', () => {
   let mockJob: Partial<Job<SendEmailJob>>
@@ -88,222 +64,234 @@ describe('Email Processor', () => {
   })
 
   describe('Development Mode', () => {
-    it('should log email details when no email service configured', () => {
-      expect(mockConfig.email.resendApiKey).toBe('')
-      expect(mockConfig.email.smtpHost).toBe('')
-      expect(consoleLogSpy).toBeDefined()
+    it('should log email details when no email service configured', async () => {
+      const result = await processEmail(mockJob as Job<SendEmailJob>)
+
+      expect(result.success).toBe(true)
+      expect(result.to).toBe('user@example.com')
+      expect(result.subject).toBe('Test Email')
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[DEV] Email would be sent to'))
     })
 
-    it('should handle verification email template', () => {
+    it('should handle verification email template in dev mode', async () => {
       mockJob.data!.template = 'verification'
       mockJob.data!.data = {
         verificationUrl: 'https://example.com/verify',
         email: 'test@example.com',
       }
 
-      expect(mockJob.data!.template).toBe('verification')
-      expect(mockJob.data!.data.verificationUrl).toBe('https://example.com/verify')
+      const result = await processEmail(mockJob as Job<SendEmailJob>)
+
+      expect(result.success).toBe(true)
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Template: verification'))
     })
 
-    it('should handle password-reset email template', () => {
+    it('should handle password-reset email template in dev mode', async () => {
       mockJob.data!.template = 'password-reset'
       mockJob.data!.data = {
         resetUrl: 'https://example.com/reset',
         email: 'test@example.com',
       }
 
-      expect(mockJob.data!.template).toBe('password-reset')
-      expect(mockJob.data!.data.resetUrl).toBe('https://example.com/reset')
+      const result = await processEmail(mockJob as Job<SendEmailJob>)
+
+      expect(result.success).toBe(true)
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Template: password-reset'))
     })
 
-    it('should handle password-changed email template', () => {
+    it('should handle password-changed email template in dev mode', async () => {
       mockJob.data!.template = 'password-changed'
       mockJob.data!.data = {
         email: 'test@example.com',
       }
 
-      expect(mockJob.data!.template).toBe('password-changed')
+      const result = await processEmail(mockJob as Job<SendEmailJob>)
+
+      expect(result.success).toBe(true)
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Template: password-changed'))
     })
 
-    it('should handle invitation email template', () => {
+    it('should handle invitation email template in dev mode', async () => {
       mockJob.data!.template = 'invitation'
       mockJob.data!.data = {
         inviteUrl: 'https://example.com/invite',
         email: 'test@example.com',
       }
 
-      expect(mockJob.data!.template).toBe('invitation')
-      expect(mockJob.data!.data.inviteUrl).toBe('https://example.com/invite')
+      const result = await processEmail(mockJob as Job<SendEmailJob>)
+
+      expect(result.success).toBe(true)
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Template: invitation'))
     })
   })
 
   describe('Resend Integration', () => {
     beforeEach(() => {
       mockConfig.email.resendApiKey = 'test-api-key'
+      mockResendSend.mockClear()
+
+      // Mock Resend dynamic import
+      jest.isolateModules(() => {
+        jest.mock('resend', () => ({
+          Resend: jest.fn(() => ({
+            emails: {
+              send: mockResendSend,
+            },
+          })),
+        }), { virtual: true })
+      })
     })
 
     it('should send email via Resend when configured', async () => {
-      mockResend.emails.send.mockResolvedValue({ id: 'resend-123' })
+      mockResendSend.mockResolvedValue({ id: 'resend-123' })
 
-      expect(mockConfig.email.resendApiKey).toBeTruthy()
-      expect(mockResend.emails.send).toBeDefined()
+      const result = await processEmail(mockJob as Job<SendEmailJob>)
+
+      expect(result.success).toBe(true)
+      expect(result.to).toBe('user@example.com')
+      expect(result.subject).toBe('Test Email')
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('✅ Email sent via Resend'))
     })
 
-    it('should use correct Resend configuration', () => {
+    it('should use correct Resend configuration', async () => {
+      mockResendSend.mockResolvedValue({ id: 'resend-123' })
+
+      await processEmail(mockJob as Job<SendEmailJob>)
+
       expect(mockConfig.email.from).toBe('noreply@temponest.app')
       expect(mockConfig.email.resendApiKey).toBe('test-api-key')
     })
 
-    it('should pass correct data to Resend API', () => {
-      const emailData = {
-        from: mockConfig.email.from,
-        to: 'user@example.com',
-        subject: 'Test Email',
-      }
+    it('should pass correct data to Resend API', async () => {
+      mockResendSend.mockResolvedValue({ id: 'resend-123' })
 
-      expect(emailData.from).toBe('noreply@temponest.app')
-      expect(emailData.to).toBe('user@example.com')
-      expect(emailData.subject).toBe('Test Email')
+      const result = await processEmail(mockJob as Job<SendEmailJob>)
+
+      expect(result.to).toBe('user@example.com')
+      expect(result.subject).toBe('Test Email')
     })
 
     it('should handle Resend API errors', async () => {
-      mockResend.emails.send.mockRejectedValue(new Error('Resend API error'))
+      mockResendSend.mockRejectedValue(new Error('Resend API error'))
 
-      await expect(async () => {
-        throw new Error('Resend API error')
-      }).rejects.toThrow('Resend API error')
+      await expect(processEmail(mockJob as Job<SendEmailJob>))
+        .rejects.toThrow('Resend API error')
     })
 
     it('should handle missing Resend package', async () => {
-      const error = new Error('MODULE_NOT_FOUND') as any
+      const error = new Error('Resend package not installed') as any
       error.code = 'MODULE_NOT_FOUND'
+      mockResendSend.mockRejectedValue(error)
 
-      expect(error.code).toBe('MODULE_NOT_FOUND')
+      await expect(processEmail(mockJob as Job<SendEmailJob>))
+        .rejects.toThrow()
     })
   })
 
   describe('SMTP Integration', () => {
     beforeEach(() => {
+      mockConfig.email.resendApiKey = '' // Disable Resend
       mockConfig.email.smtpHost = 'smtp.example.com'
       mockConfig.email.smtpUser = 'test@example.com'
       mockConfig.email.smtpPassword = 'password123'
-    })
+      mockSendMail.mockClear()
 
-    it('should send email via SMTP when configured', () => {
-      const transporter = mockNodemailer.default.createTransporter({
-        host: mockConfig.email.smtpHost,
-        port: mockConfig.email.smtpPort,
-        secure: mockConfig.email.smtpSecure,
-        auth: {
-          user: mockConfig.email.smtpUser,
-          pass: mockConfig.email.smtpPassword,
-        },
+      // Mock nodemailer and @react-email/render dynamic imports
+      jest.isolateModules(() => {
+        jest.mock('nodemailer', () => ({
+          default: {
+            createTransporter: jest.fn(() => ({
+              sendMail: mockSendMail,
+            })),
+          },
+        }), { virtual: true })
+
+        jest.mock('@react-email/render', () => ({
+          render: mockRender,
+        }), { virtual: true })
       })
-
-      expect(transporter).toBeDefined()
-      expect(mockConfig.email.smtpHost).toBe('smtp.example.com')
     })
 
-    it('should use correct SMTP configuration', () => {
+    it('should send email via SMTP when configured', async () => {
+      mockSendMail.mockResolvedValue({ messageId: 'smtp-123' })
+
+      const result = await processEmail(mockJob as Job<SendEmailJob>)
+
+      expect(result.success).toBe(true)
+      expect(result.to).toBe('user@example.com')
+      expect(result.subject).toBe('Test Email')
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('✅ Email sent via SMTP'))
+    })
+
+    it('should use correct SMTP configuration', async () => {
+      mockSendMail.mockResolvedValue({ messageId: 'smtp-123' })
+
+      await processEmail(mockJob as Job<SendEmailJob>)
+
       expect(mockConfig.email.smtpHost).toBe('smtp.example.com')
       expect(mockConfig.email.smtpPort).toBe(587)
       expect(mockConfig.email.smtpSecure).toBe(false)
       expect(mockConfig.email.smtpUser).toBe('test@example.com')
     })
 
-    it('should render email template to HTML', () => {
-      const html = mockRender()
-      expect(html).toBe('<html>Email content</html>')
+    it('should render email template to HTML', async () => {
+      mockSendMail.mockResolvedValue({ messageId: 'smtp-123' })
+
+      await processEmail(mockJob as Job<SendEmailJob>)
+
+      expect(mockRender).toHaveBeenCalled()
     })
 
     it('should handle SMTP send errors', async () => {
-      const transporter = mockNodemailer.default.createTransporter({})
-      const sendMail = transporter.sendMail as jest.Mock
-      sendMail.mockRejectedValue(new Error('SMTP send failed'))
+      mockSendMail.mockRejectedValue(new Error('SMTP send failed'))
 
-      await expect(sendMail()).rejects.toThrow('SMTP send failed')
+      await expect(processEmail(mockJob as Job<SendEmailJob>))
+        .rejects.toThrow('SMTP send failed')
     })
 
-    it('should handle missing nodemailer package', () => {
+    it('should handle missing nodemailer package', async () => {
       const error = new Error('MODULE_NOT_FOUND') as any
       error.code = 'MODULE_NOT_FOUND'
+      mockSendMail.mockRejectedValue(error)
 
-      expect(error.code).toBe('MODULE_NOT_FOUND')
+      await expect(processEmail(mockJob as Job<SendEmailJob>))
+        .rejects.toThrow()
     })
   })
 
   describe('Template Rendering', () => {
-    it('should render verification email template', () => {
-      const data = {
-        verificationUrl: 'https://example.com/verify',
-        email: 'test@example.com',
-      }
+    it('should throw error for unknown template', async () => {
+      mockJob.data!.template = 'unknown-template' as any
 
-      expect(data.verificationUrl).toBeTruthy()
-      expect(data.email).toBe('test@example.com')
-    })
+      await expect(processEmail(mockJob as Job<SendEmailJob>))
+        .rejects.toThrow('Unknown email template: unknown-template')
 
-    it('should render password reset email template', () => {
-      const data = {
-        resetUrl: 'https://example.com/reset',
-        email: 'test@example.com',
-      }
-
-      expect(data.resetUrl).toBeTruthy()
-      expect(data.email).toBe('test@example.com')
-    })
-
-    it('should render password changed email template', () => {
-      const data = {
-        email: 'test@example.com',
-      }
-
-      expect(data.email).toBe('test@example.com')
-    })
-
-    it('should fallback to verification template for invitation', () => {
-      const data = {
-        inviteUrl: 'https://example.com/invite',
-        email: 'test@example.com',
-      }
-
-      // Invitation uses verification template until a dedicated template is created
-      expect(data.inviteUrl).toBeTruthy()
-    })
-
-    it('should throw error for unknown template', () => {
-      expect(() => {
-        const template = 'unknown-template' as SendEmailJob['template']
-        if (!['verification', 'password-reset', 'password-changed', 'invitation'].includes(template)) {
-          throw new Error(`Unknown email template: ${template}`)
-        }
-      }).toThrow('Unknown email template: unknown-template')
+      expect(consoleErrorSpy).toHaveBeenCalled()
     })
   })
 
   describe('Job Processing', () => {
-    it('should return success result', () => {
-      const result = { success: true, to: 'test@example.com', subject: 'Test' }
+    it('should return success result with correct data', async () => {
+      const result = await processEmail(mockJob as Job<SendEmailJob>)
 
       expect(result.success).toBe(true)
-      expect(result.to).toBe('test@example.com')
-      expect(result.subject).toBe('Test')
+      expect(result.to).toBe('user@example.com')
+      expect(result.subject).toBe('Test Email')
     })
 
-    it('should log email processing start', () => {
-      const to = 'test@example.com'
-      const subject = 'Test Email'
+    it('should log email processing start', async () => {
+      await processEmail(mockJob as Job<SendEmailJob>)
 
-      expect(to).toBe('test@example.com')
-      expect(subject).toBe('Test Email')
+      expect(consoleLogSpy).toHaveBeenCalledWith('📧 Sending email to user@example.com: Test Email')
     })
 
-    it('should log success after sending', () => {
-      expect(consoleLogSpy).toBeDefined()
-    })
+    it('should log errors when email fails', async () => {
+      // Force an error by providing invalid template
+      mockJob.data!.template = null as any
 
-    it('should log errors when email fails', () => {
-      expect(consoleErrorSpy).toBeDefined()
+      await expect(processEmail(mockJob as Job<SendEmailJob>)).rejects.toThrow()
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith('❌ Email send failed:', expect.any(Error))
     })
   })
 
@@ -312,28 +300,16 @@ describe('Email Processor', () => {
       const emailConcurrency = mockConfig.workers.concurrency * 2
       expect(emailConcurrency).toBe(2)
     })
-
-    it('should configure redis connection', () => {
-      const connection = {}
-      expect(connection).toBeDefined()
-    })
   })
 
   describe('Error Handling', () => {
-    it('should handle and rethrow errors', async () => {
-      const error = new Error('Email send failed')
+    it('should rethrow errors after logging', async () => {
+      mockJob.data!.template = 'invalid' as any
 
-      await expect(async () => {
-        throw error
-      }).rejects.toThrow('Email send failed')
-    })
+      await expect(processEmail(mockJob as Job<SendEmailJob>))
+        .rejects.toThrow()
 
-    it('should log error details', () => {
-      const error = new Error('Test error')
-      consoleErrorSpy.mockImplementation()
-
-      expect(error.message).toBe('Test error')
-      expect(consoleErrorSpy).toBeDefined()
+      expect(consoleErrorSpy).toHaveBeenCalled()
     })
   })
 })

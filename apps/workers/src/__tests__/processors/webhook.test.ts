@@ -24,6 +24,9 @@ jest.mock('../../config', () => ({
   },
 }))
 
+// Import after all mocks are set up
+const { processWebhook } = require('../../processors/webhook')
+
 describe('Webhook Processor', () => {
   let mockJob: Partial<Job<ProcessWebhookJob>>
   let consoleLogSpy: jest.SpyInstance
@@ -67,26 +70,38 @@ describe('Webhook Processor', () => {
       ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
       mockPrisma.webhookDelivery.create.mockResolvedValue({})
 
-      const expectedHeaders = {
-        'Content-Type': 'application/json',
-        'X-TempoNest-Event': 'deployment.success',
-        'X-TempoNest-Signature': expect.any(String),
-        'User-Agent': 'TempoNest-Webhook/1.0',
-      }
+      const result = await processWebhook(mockJob as Job<ProcessWebhookJob>)
 
-      expect(expectedHeaders['Content-Type']).toBe('application/json')
-      expect(expectedHeaders['X-TempoNest-Event']).toBe('deployment.success')
-      expect(expectedHeaders['User-Agent']).toBe('TempoNest-Webhook/1.0')
+      expect(result.success).toBe(true)
+      expect(result.status).toBe(200)
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://hooks.example.com/webhook',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-TempoNest-Event': 'deployment.success',
+            'X-TempoNest-Signature': expect.any(String),
+            'User-Agent': 'TempoNest-Webhook/1.0',
+          },
+        })
+      )
     })
 
-    it('should generate correct HMAC signature', () => {
-      const payload = { test: 'data' }
-      const secret = 'webhook-secret-key'
+    it('should generate correct HMAC signature', async () => {
+      const mockResponse = {
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue('OK'),
+      }
+      ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
+      mockPrisma.webhookDelivery.create.mockResolvedValue({})
 
-      const signature = crypto
-        .createHmac('sha256', secret)
-        .update(JSON.stringify(payload))
-        .digest('hex')
+      await processWebhook(mockJob as Job<ProcessWebhookJob>)
+
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0]
+      const headers = fetchCall[1].headers
+      const signature = headers['X-TempoNest-Signature']
 
       expect(signature).toBeTruthy()
       expect(signature.length).toBe(64) // SHA256 hex is 64 characters
@@ -102,15 +117,13 @@ describe('Webhook Processor', () => {
       ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
       mockPrisma.webhookDelivery.create.mockResolvedValue({})
 
-      await global.fetch(mockJob.data!.url, {
-        method: 'POST',
-        body: JSON.stringify(mockJob.data!.payload),
-      })
+      await processWebhook(mockJob as Job<ProcessWebhookJob>)
 
       expect(global.fetch).toHaveBeenCalledWith(
         'https://hooks.example.com/webhook',
         expect.objectContaining({
           method: 'POST',
+          body: JSON.stringify(mockJob.data!.payload),
         })
       )
     })
@@ -124,13 +137,31 @@ describe('Webhook Processor', () => {
       ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
       mockPrisma.webhookDelivery.create.mockResolvedValue({})
 
-      await mockResponse.text()
+      await processWebhook(mockJob as Job<ProcessWebhookJob>)
 
-      expect(mockPrisma.webhookDelivery.create).toBeDefined()
+      expect(mockPrisma.webhookDelivery.create).toHaveBeenCalledWith({
+        data: {
+          webhookId: 'webhook-123',
+          event: 'deployment.success',
+          url: 'https://hooks.example.com/webhook',
+          status: 'success',
+          statusCode: 200,
+          response: 'Success',
+          attempt: 1,
+        },
+      })
     })
 
-    it('should return success result', () => {
-      const result = { success: true, status: 200 }
+    it('should return success result', async () => {
+      const mockResponse = {
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue('OK'),
+      }
+      ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
+      mockPrisma.webhookDelivery.create.mockResolvedValue({})
+
+      const result = await processWebhook(mockJob as Job<ProcessWebhookJob>)
 
       expect(result.success).toBe(true)
       expect(result.status).toBe(200)
@@ -138,54 +169,56 @@ describe('Webhook Processor', () => {
   })
 
   describe('Signature Generation', () => {
-    it('should generate signature when secret is provided', () => {
-      const payload = { key: 'value' }
-      const secret = 'test-secret'
-
-      const signature = crypto
-        .createHmac('sha256', secret)
-        .update(JSON.stringify(payload))
-        .digest('hex')
-
-      expect(signature).toBeTruthy()
-      expect(typeof signature).toBe('string')
-    })
-
-    it('should handle empty signature when no secret provided', () => {
+    it('should send empty signature when no secret provided', async () => {
       mockJob.data!.secret = undefined
+      const mockResponse = {
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue('OK'),
+      }
+      ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
+      mockPrisma.webhookDelivery.create.mockResolvedValue({})
 
-      const signature = undefined
+      await processWebhook(mockJob as Job<ProcessWebhookJob>)
 
-      expect(signature).toBeUndefined()
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0]
+      const headers = fetchCall[1].headers
+      expect(headers['X-TempoNest-Signature']).toBe('')
     })
 
-    it('should generate different signatures for different payloads', () => {
-      const secret = 'test-secret'
-      const payload1 = { id: 1 }
-      const payload2 = { id: 2 }
+    it('should generate different signatures for different payloads', async () => {
+      const mockResponse = {
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue('OK'),
+      }
+      ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
+      mockPrisma.webhookDelivery.create.mockResolvedValue({})
 
-      const sig1 = crypto.createHmac('sha256', secret)
-        .update(JSON.stringify(payload1))
-        .digest('hex')
+      await processWebhook(mockJob as Job<ProcessWebhookJob>)
+      const sig1 = (global.fetch as jest.Mock).mock.calls[0][1].headers['X-TempoNest-Signature']
 
-      const sig2 = crypto.createHmac('sha256', secret)
-        .update(JSON.stringify(payload2))
-        .digest('hex')
+      mockJob.data!.payload = { different: 'data' }
+      await processWebhook(mockJob as Job<ProcessWebhookJob>)
+      const sig2 = (global.fetch as jest.Mock).mock.calls[1][1].headers['X-TempoNest-Signature']
 
       expect(sig1).not.toBe(sig2)
     })
 
-    it('should generate consistent signatures for same payload', () => {
-      const secret = 'test-secret'
-      const payload = { id: 1 }
+    it('should generate consistent signatures for same payload', async () => {
+      const mockResponse = {
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue('OK'),
+      }
+      ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
+      mockPrisma.webhookDelivery.create.mockResolvedValue({})
 
-      const sig1 = crypto.createHmac('sha256', secret)
-        .update(JSON.stringify(payload))
-        .digest('hex')
+      await processWebhook(mockJob as Job<ProcessWebhookJob>)
+      const sig1 = (global.fetch as jest.Mock).mock.calls[0][1].headers['X-TempoNest-Signature']
 
-      const sig2 = crypto.createHmac('sha256', secret)
-        .update(JSON.stringify(payload))
-        .digest('hex')
+      await processWebhook(mockJob as Job<ProcessWebhookJob>)
+      const sig2 = (global.fetch as jest.Mock).mock.calls[1][1].headers['X-TempoNest-Signature']
 
       expect(sig1).toBe(sig2)
     })
@@ -201,11 +234,20 @@ describe('Webhook Processor', () => {
       ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
       mockPrisma.webhookDelivery.create.mockResolvedValue({})
 
-      const errorText = await mockResponse.text()
+      await expect(processWebhook(mockJob as Job<ProcessWebhookJob>))
+        .rejects.toThrow('Webhook failed with status 500')
 
-      expect(mockResponse.ok).toBe(false)
-      expect(mockResponse.status).toBe(500)
-      expect(errorText).toBe('Internal Server Error')
+      expect(mockPrisma.webhookDelivery.create).toHaveBeenCalledWith({
+        data: {
+          webhookId: 'webhook-123',
+          event: 'deployment.success',
+          url: 'https://hooks.example.com/webhook',
+          status: 'failed',
+          statusCode: 500,
+          response: 'Internal Server Error',
+          attempt: 1,
+        },
+      })
     })
 
     it('should create failed delivery log', async () => {
@@ -217,193 +259,82 @@ describe('Webhook Processor', () => {
       ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
       mockPrisma.webhookDelivery.create.mockResolvedValue({})
 
-      expect(mockPrisma.webhookDelivery.create).toBeDefined()
+      await expect(processWebhook(mockJob as Job<ProcessWebhookJob>))
+        .rejects.toThrow()
+
+      expect(mockPrisma.webhookDelivery.create).toHaveBeenCalled()
     })
 
     it('should handle network errors', async () => {
       ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
       mockPrisma.webhookDelivery.create.mockResolvedValue({})
 
-      await expect(global.fetch('https://example.com')).rejects.toThrow('Network error')
+      await expect(processWebhook(mockJob as Job<ProcessWebhookJob>))
+        .rejects.toThrow('Network error')
+
+      expect(mockPrisma.webhookDelivery.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          status: 'failed',
+          statusCode: 0,
+          response: 'Network error',
+        }),
+      })
     })
 
     it('should log delivery error', async () => {
       ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Failed'))
       mockPrisma.webhookDelivery.create.mockResolvedValue({})
 
-      try {
-        await global.fetch('https://example.com')
-      } catch (error) {
-        expect(error).toBeInstanceOf(Error)
-        expect(consoleErrorSpy).toBeDefined()
-      }
+      await expect(processWebhook(mockJob as Job<ProcessWebhookJob>))
+        .rejects.toThrow('Failed')
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Webhook delivery failed'),
+        expect.any(Error)
+      )
     })
 
     it('should throw error after logging failure', async () => {
-      const error = new Error('Webhook failed')
-
-      await expect(async () => {
-        throw error
-      }).rejects.toThrow('Webhook failed')
-    })
-  })
-
-  describe('Webhook Delivery Logging', () => {
-    it('should log webhook attempt number', () => {
-      const attemptsMade = mockJob.attemptsMade
-
-      expect(attemptsMade).toBe(1)
-    })
-
-    it('should include status code in delivery log', async () => {
       const mockResponse = {
-        ok: true,
-        status: 201,
-        text: jest.fn().mockResolvedValue('Created'),
+        ok: false,
+        status: 502,
+        text: jest.fn().mockResolvedValue('Bad Gateway'),
       }
       ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
       mockPrisma.webhookDelivery.create.mockResolvedValue({})
 
-      expect(mockResponse.status).toBe(201)
-    })
+      await expect(processWebhook(mockJob as Job<ProcessWebhookJob>))
+        .rejects.toThrow('Webhook failed with status 502')
 
-    it('should store response text in delivery log', async () => {
-      const mockResponse = {
-        ok: true,
-        status: 200,
-        text: jest.fn().mockResolvedValue('Success response'),
-      }
-      ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
-
-      const responseText = await mockResponse.text()
-
-      expect(responseText).toBe('Success response')
-    })
-
-    it('should log network errors with status 0', () => {
-      const deliveryLog = {
-        statusCode: 0,
-        status: 'failed',
-        response: 'Network error',
-      }
-
-      expect(deliveryLog.statusCode).toBe(0)
-      expect(deliveryLog.status).toBe('failed')
+      expect(consoleErrorSpy).toHaveBeenCalled()
     })
   })
 
   describe('Event Types', () => {
-    it('should handle deployment.success event', () => {
-      mockJob.data!.event = 'deployment.success'
-
-      expect(mockJob.data!.event).toBe('deployment.success')
-    })
-
-    it('should handle deployment.failed event', () => {
-      mockJob.data!.event = 'deployment.failed'
-
-      expect(mockJob.data!.event).toBe('deployment.failed')
-    })
-
-    it('should handle project.created event', () => {
-      mockJob.data!.event = 'project.created'
-
-      expect(mockJob.data!.event).toBe('project.created')
-    })
-
-    it('should handle custom event types', () => {
-      mockJob.data!.event = 'custom.event'
-
-      expect(mockJob.data!.event).toBe('custom.event')
-    })
-  })
-
-  describe('HTTP Response Handling', () => {
-    it('should handle 200 OK response', async () => {
+    it('should handle different event types', async () => {
       const mockResponse = {
         ok: true,
         status: 200,
         text: jest.fn().mockResolvedValue('OK'),
       }
       ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
+      mockPrisma.webhookDelivery.create.mockResolvedValue({})
 
-      expect(mockResponse.ok).toBe(true)
-      expect(mockResponse.status).toBe(200)
-    })
+      const events = ['deployment.success', 'deployment.failed', 'project.created', 'custom.event']
 
-    it('should handle 201 Created response', async () => {
-      const mockResponse = {
-        ok: true,
-        status: 201,
-        text: jest.fn().mockResolvedValue('Created'),
+      for (const event of events) {
+        mockJob.data!.event = event as any
+        await processWebhook(mockJob as Job<ProcessWebhookJob>)
+
+        expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Processing webhook: ${event}`))
       }
-      ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
-
-      expect(mockResponse.ok).toBe(true)
-      expect(mockResponse.status).toBe(201)
-    })
-
-    it('should handle 400 Bad Request', async () => {
-      const mockResponse = {
-        ok: false,
-        status: 400,
-        text: jest.fn().mockResolvedValue('Bad Request'),
-      }
-      ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
-
-      expect(mockResponse.ok).toBe(false)
-      expect(mockResponse.status).toBe(400)
-    })
-
-    it('should handle 500 Internal Server Error', async () => {
-      const mockResponse = {
-        ok: false,
-        status: 500,
-        text: jest.fn().mockResolvedValue('Internal Server Error'),
-      }
-      ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
-
-      expect(mockResponse.ok).toBe(false)
-      expect(mockResponse.status).toBe(500)
-    })
-  })
-
-  describe('Payload Serialization', () => {
-    it('should serialize complex payloads', () => {
-      const payload = {
-        id: 123,
-        nested: {
-          key: 'value',
-          array: [1, 2, 3],
-        },
-      }
-
-      const serialized = JSON.stringify(payload)
-
-      expect(typeof serialized).toBe('string')
-      expect(JSON.parse(serialized)).toEqual(payload)
-    })
-
-    it('should handle empty payloads', () => {
-      const payload = {}
-
-      const serialized = JSON.stringify(payload)
-
-      expect(serialized).toBe('{}')
     })
   })
 
   describe('Job Configuration', () => {
     it('should use configured concurrency', () => {
       const concurrency = 2
-
       expect(concurrency).toBe(2)
-    })
-
-    it('should configure redis connection', () => {
-      const connection = {}
-
-      expect(connection).toBeDefined()
     })
   })
 })

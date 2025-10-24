@@ -27,6 +27,9 @@ jest.mock('../../config', () => ({
   },
 }))
 
+// Import after all mocks are set up
+const { processCleanup } = require('../../processors/cleanup')
+
 describe('Cleanup Processor', () => {
   let mockJob: Partial<Job<CleanupJob>>
   let consoleLogSpy: jest.SpyInstance
@@ -61,17 +64,27 @@ describe('Cleanup Processor', () => {
     it('should delete old failed deployments', async () => {
       mockPrisma.deployment.deleteMany.mockResolvedValue({ count: 15 })
 
-      const result = { success: true, deletedCount: 15 }
+      const result = await processCleanup(mockJob as Job<CleanupJob>)
 
       expect(result.success).toBe(true)
       expect(result.deletedCount).toBe(15)
+      expect(mockPrisma.deployment.deleteMany).toHaveBeenCalledWith({
+        where: {
+          status: 'failed',
+          createdAt: {
+            lt: expect.any(Date),
+          },
+        },
+      })
     })
 
-    it('should calculate correct cutoff date', () => {
-      const olderThanDays = 30
-      const cutoffDate = new Date()
-      cutoffDate.setDate(cutoffDate.getDate() - olderThanDays)
+    it('should calculate correct cutoff date', async () => {
+      mockPrisma.deployment.deleteMany.mockResolvedValue({ count: 5 })
 
+      await processCleanup(mockJob as Job<CleanupJob>)
+
+      const call = mockPrisma.deployment.deleteMany.mock.calls[0][0]
+      const cutoffDate = call.where.createdAt.lt
       const now = new Date()
       const expectedCutoff = new Date()
       expectedCutoff.setDate(now.getDate() - 30)
@@ -80,43 +93,41 @@ describe('Cleanup Processor', () => {
       expect(Math.abs(cutoffDate.getTime() - expectedCutoff.getTime())).toBeLessThan(1000)
     })
 
-    it('should only delete failed deployments', () => {
+    it('should only delete failed deployments', async () => {
       mockPrisma.deployment.deleteMany.mockResolvedValue({ count: 5 })
 
-      const cutoffDate = new Date()
-      cutoffDate.setDate(cutoffDate.getDate() - 30)
+      await processCleanup(mockJob as Job<CleanupJob>)
 
-      const expectedQuery = {
+      expect(mockPrisma.deployment.deleteMany).toHaveBeenCalledWith({
         where: {
           status: 'failed',
           createdAt: {
-            lt: cutoffDate,
+            lt: expect.any(Date),
           },
         },
-      }
-
-      expect(expectedQuery.where.status).toBe('failed')
-      expect(expectedQuery.where.createdAt.lt).toBeInstanceOf(Date)
+      })
     })
 
     it('should handle zero deletions', async () => {
       mockPrisma.deployment.deleteMany.mockResolvedValue({ count: 0 })
 
-      const result = { success: true, deletedCount: 0 }
+      const result = await processCleanup(mockJob as Job<CleanupJob>)
 
       expect(result.success).toBe(true)
       expect(result.deletedCount).toBe(0)
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('0 records deleted'))
     })
 
     it('should handle different retention periods', async () => {
       const testCases = [7, 30, 90, 365]
 
       for (const days of testCases) {
-        const cutoffDate = new Date()
-        cutoffDate.setDate(cutoffDate.getDate() - days)
+        mockJob.data!.olderThanDays = days
+        mockPrisma.deployment.deleteMany.mockResolvedValue({ count: 1 })
 
-        expect(cutoffDate).toBeInstanceOf(Date)
-        expect(cutoffDate.getTime()).toBeLessThan(Date.now())
+        await processCleanup(mockJob as Job<CleanupJob>)
+
+        expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`older than ${days} days`))
       }
     })
   })
@@ -130,33 +141,35 @@ describe('Cleanup Processor', () => {
     it('should delete old activity logs', async () => {
       mockPrisma.activity.deleteMany.mockResolvedValue({ count: 150 })
 
-      const result = { success: true, deletedCount: 150 }
+      const result = await processCleanup(mockJob as Job<CleanupJob>)
 
       expect(result.success).toBe(true)
       expect(result.deletedCount).toBe(150)
-    })
-
-    it('should use correct date filter for logs', () => {
-      const cutoffDate = new Date()
-      cutoffDate.setDate(cutoffDate.getDate() - 90)
-
-      const query = {
+      expect(mockPrisma.activity.deleteMany).toHaveBeenCalledWith({
         where: {
           createdAt: {
-            lt: cutoffDate,
+            lt: expect.any(Date),
           },
         },
-      }
+      })
+    })
 
-      expect(query.where.createdAt.lt).toBeInstanceOf(Date)
+    it('should use correct date filter for logs', async () => {
+      mockPrisma.activity.deleteMany.mockResolvedValue({ count: 10 })
+
+      await processCleanup(mockJob as Job<CleanupJob>)
+
+      const call = mockPrisma.activity.deleteMany.mock.calls[0][0]
+      expect(call.where.createdAt.lt).toBeInstanceOf(Date)
     })
 
     it('should handle large deletion counts', async () => {
       mockPrisma.activity.deleteMany.mockResolvedValue({ count: 10000 })
 
-      const result = { success: true, deletedCount: 10000 }
+      const result = await processCleanup(mockJob as Job<CleanupJob>)
 
       expect(result.deletedCount).toBe(10000)
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('10000 records deleted'))
     })
   })
 
@@ -169,52 +182,53 @@ describe('Cleanup Processor', () => {
     it('should delete expired sessions', async () => {
       mockPrisma.session.deleteMany.mockResolvedValue({ count: 42 })
 
-      const result = { success: true, deletedCount: 42 }
+      const result = await processCleanup(mockJob as Job<CleanupJob>)
 
       expect(result.success).toBe(true)
       expect(result.deletedCount).toBe(42)
-    })
-
-    it('should use current date for session expiration', () => {
-      const now = new Date()
-
-      const query = {
+      expect(mockPrisma.session.deleteMany).toHaveBeenCalledWith({
         where: {
           expiresAt: {
-            lt: now,
+            lt: expect.any(Date),
           },
         },
-      }
-
-      expect(query.where.expiresAt.lt).toBeInstanceOf(Date)
+      })
     })
 
-    it('should ignore olderThanDays parameter for sessions', () => {
-      // Sessions use expiresAt, not createdAt + olderThanDays
-      const olderThanDays = 30
-      const now = new Date()
+    it('should use current date for session expiration', async () => {
+      mockPrisma.session.deleteMany.mockResolvedValue({ count: 5 })
 
-      const query = {
+      await processCleanup(mockJob as Job<CleanupJob>)
+
+      const call = mockPrisma.session.deleteMany.mock.calls[0][0]
+      expect(call.where.expiresAt.lt).toBeInstanceOf(Date)
+    })
+
+    it('should ignore olderThanDays parameter for sessions', async () => {
+      mockJob.data!.olderThanDays = 30 // Should be ignored
+      mockPrisma.session.deleteMany.mockResolvedValue({ count: 5 })
+
+      await processCleanup(mockJob as Job<CleanupJob>)
+
+      // Sessions use expiresAt, not olderThanDays
+      expect(mockPrisma.session.deleteMany).toHaveBeenCalledWith({
         where: {
           expiresAt: {
-            lt: now,
+            lt: expect.any(Date),
           },
         },
-      }
-
-      expect(query.where.expiresAt.lt).toBeInstanceOf(Date)
+      })
     })
   })
 
   describe('Error Handling', () => {
-    it('should handle unknown cleanup type', () => {
-      const invalidType = 'unknown-type' as CleanupJob['type']
+    it('should handle unknown cleanup type', async () => {
+      mockJob.data!.type = 'unknown-type' as any
 
-      expect(() => {
-        if (!['deployments', 'logs', 'expired-sessions'].includes(invalidType)) {
-          throw new Error(`Unknown cleanup type: ${invalidType}`)
-        }
-      }).toThrow('Unknown cleanup type: unknown-type')
+      await expect(processCleanup(mockJob as Job<CleanupJob>))
+        .rejects.toThrow('Unknown cleanup type: unknown-type')
+
+      expect(consoleErrorSpy).toHaveBeenCalled()
     })
 
     it('should handle database errors', async () => {
@@ -222,118 +236,66 @@ describe('Cleanup Processor', () => {
         new Error('Database connection failed')
       )
 
-      await expect(
-        mockPrisma.deployment.deleteMany()
-      ).rejects.toThrow('Database connection failed')
+      await expect(processCleanup(mockJob as Job<CleanupJob>))
+        .rejects.toThrow('Database connection failed')
     })
 
-    it('should log errors when cleanup fails', () => {
-      const error = new Error('Cleanup failed')
+    it('should log errors when cleanup fails', async () => {
+      mockPrisma.deployment.deleteMany.mockRejectedValue(
+        new Error('Cleanup failed')
+      )
 
-      expect(error.message).toBe('Cleanup failed')
-      expect(consoleErrorSpy).toBeDefined()
+      await expect(processCleanup(mockJob as Job<CleanupJob>))
+        .rejects.toThrow('Cleanup failed')
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Cleanup failed'), expect.any(Error))
     })
 
     it('should rethrow errors after logging', async () => {
-      const error = new Error('Test error')
+      mockPrisma.deployment.deleteMany.mockRejectedValue(
+        new Error('Test error')
+      )
 
-      await expect(async () => {
-        throw error
-      }).rejects.toThrow('Test error')
+      await expect(processCleanup(mockJob as Job<CleanupJob>))
+        .rejects.toThrow('Test error')
+
+      expect(consoleErrorSpy).toHaveBeenCalled()
     })
   })
 
   describe('Job Configuration', () => {
     it('should use sequential concurrency for cleanup jobs', () => {
       const concurrency = 1
-
       expect(concurrency).toBe(1)
-    })
-
-    it('should configure redis connection', () => {
-      const connection = {}
-
-      expect(connection).toBeDefined()
     })
   })
 
   describe('Result Reporting', () => {
-    it('should return success with deletion count', () => {
-      const result = { success: true, deletedCount: 25 }
+    it('should return success with deletion count', async () => {
+      mockPrisma.deployment.deleteMany.mockResolvedValue({ count: 25 })
+
+      const result = await processCleanup(mockJob as Job<CleanupJob>)
 
       expect(result).toHaveProperty('success', true)
-      expect(result).toHaveProperty('deletedCount')
+      expect(result).toHaveProperty('deletedCount', 25)
       expect(typeof result.deletedCount).toBe('number')
     })
 
-    it('should log cleanup start', () => {
-      const type = 'deployments'
-      const olderThanDays = 30
+    it('should log cleanup start', async () => {
+      mockPrisma.deployment.deleteMany.mockResolvedValue({ count: 10 })
 
-      expect(type).toBe('deployments')
-      expect(olderThanDays).toBe(30)
-      expect(consoleLogSpy).toBeDefined()
+      await processCleanup(mockJob as Job<CleanupJob>)
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Running cleanup: deployments'))
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('older than 30 days'))
     })
 
-    it('should log cleanup completion with count', () => {
-      const deletedCount = 42
+    it('should log cleanup completion with count', async () => {
+      mockPrisma.deployment.deleteMany.mockResolvedValue({ count: 42 })
 
-      expect(deletedCount).toBe(42)
-      expect(consoleLogSpy).toBeDefined()
-    })
-  })
+      await processCleanup(mockJob as Job<CleanupJob>)
 
-  describe('Date Calculations', () => {
-    it('should handle 7-day retention', () => {
-      const cutoffDate = new Date()
-      cutoffDate.setDate(cutoffDate.getDate() - 7)
-
-      const sevenDaysAgo = new Date()
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-
-      expect(Math.abs(cutoffDate.getTime() - sevenDaysAgo.getTime())).toBeLessThan(1000)
-    })
-
-    it('should handle 30-day retention', () => {
-      const cutoffDate = new Date()
-      cutoffDate.setDate(cutoffDate.getDate() - 30)
-
-      expect(cutoffDate.getTime()).toBeLessThan(Date.now())
-    })
-
-    it('should handle 90-day retention', () => {
-      const cutoffDate = new Date()
-      cutoffDate.setDate(cutoffDate.getDate() - 90)
-
-      const now = Date.now()
-      const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000
-
-      expect(cutoffDate.getTime()).toBeLessThan(now)
-      expect(now - cutoffDate.getTime()).toBeGreaterThan(ninetyDaysMs - 1000)
-    })
-
-    it('should handle year-long retention', () => {
-      const cutoffDate = new Date()
-      cutoffDate.setDate(cutoffDate.getDate() - 365)
-
-      expect(cutoffDate.getTime()).toBeLessThan(Date.now())
-    })
-  })
-
-  describe('Cleanup Type Validation', () => {
-    it('should accept valid deployment type', () => {
-      const type: CleanupJob['type'] = 'deployments'
-      expect(['deployments', 'logs', 'expired-sessions']).toContain(type)
-    })
-
-    it('should accept valid logs type', () => {
-      const type: CleanupJob['type'] = 'logs'
-      expect(['deployments', 'logs', 'expired-sessions']).toContain(type)
-    })
-
-    it('should accept valid expired-sessions type', () => {
-      const type: CleanupJob['type'] = 'expired-sessions'
-      expect(['deployments', 'logs', 'expired-sessions']).toContain(type)
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('42 records deleted'))
     })
   })
 })

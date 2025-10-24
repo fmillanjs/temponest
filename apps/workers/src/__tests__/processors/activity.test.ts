@@ -16,6 +16,9 @@ jest.mock('../../config', () => ({
   redis: {},
 }))
 
+// Import after all mocks are set up
+const { processActivityLog } = require('../../processors/activity')
+
 describe('Activity Processor', () => {
   let mockJob: Partial<Job<ActivityLogParams>>
   let consoleLogSpy: jest.SpyInstance
@@ -54,40 +57,75 @@ describe('Activity Processor', () => {
     it('should create activity record in database', async () => {
       mockPrisma.activity.create.mockResolvedValue({})
 
-      await mockPrisma.activity.create({
-        data: mockJob.data,
-      })
+      await processActivityLog(mockJob as Job<ActivityLogParams>)
 
       expect(mockPrisma.activity.create).toHaveBeenCalledWith({
-        data: mockJob.data,
+        data: {
+          action: 'project.created',
+          entity: 'project',
+          entityId: 'proj-123',
+          organizationId: 'org-123',
+          userId: 'user-123',
+          projectId: 'proj-123',
+          metadata: { name: 'Test Project' },
+          ipAddress: '192.168.1.1',
+          userAgent: 'Mozilla/5.0',
+        },
       })
     })
 
-    it('should log action and entity type', () => {
-      const { action, entityType } = mockJob.data!
+    it('should log action and entity type', async () => {
+      mockPrisma.activity.create.mockResolvedValue({})
 
-      expect(action).toBe('project.created')
-      expect(entityType).toBe('project')
+      await processActivityLog(mockJob as Job<ActivityLogParams>)
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Logged activity: project.created for project')
+      )
     })
 
-    it('should include user context', () => {
-      const { userId, organizationId } = mockJob.data!
+    it('should include user context', async () => {
+      mockPrisma.activity.create.mockResolvedValue({})
 
-      expect(userId).toBe('user-123')
-      expect(organizationId).toBe('org-123')
+      await processActivityLog(mockJob as Job<ActivityLogParams>)
+
+      expect(mockPrisma.activity.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'user-123',
+            organizationId: 'org-123',
+          }),
+        })
+      )
     })
 
-    it('should include IP address and user agent', () => {
-      const { ipAddress, userAgent } = mockJob.data!
+    it('should include IP address and user agent', async () => {
+      mockPrisma.activity.create.mockResolvedValue({})
 
-      expect(ipAddress).toBe('192.168.1.1')
-      expect(userAgent).toBe('Mozilla/5.0')
+      await processActivityLog(mockJob as Job<ActivityLogParams>)
+
+      expect(mockPrisma.activity.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            ipAddress: '192.168.1.1',
+            userAgent: 'Mozilla/5.0',
+          }),
+        })
+      )
     })
 
-    it('should store metadata object', () => {
-      const { metadata } = mockJob.data!
+    it('should store metadata object', async () => {
+      mockPrisma.activity.create.mockResolvedValue({})
 
-      expect(metadata).toEqual({ name: 'Test Project' })
+      await processActivityLog(mockJob as Job<ActivityLogParams>)
+
+      expect(mockPrisma.activity.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: { name: 'Test Project' },
+          }),
+        })
+      )
     })
 
     it('should handle optional fields', async () => {
@@ -97,102 +135,72 @@ describe('Activity Processor', () => {
 
       mockPrisma.activity.create.mockResolvedValue({})
 
-      const data = {
-        ...mockJob.data,
-        metadata: mockJob.data!.metadata || {},
-      }
+      await processActivityLog(mockJob as Job<ActivityLogParams>)
 
-      expect(data.metadata).toEqual({})
+      expect(mockPrisma.activity.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: {},
+          }),
+        })
+      )
     })
   })
 
   describe('Activity Actions', () => {
-    it('should handle project.created action', () => {
-      mockJob.data!.action = 'project.created'
+    it('should handle different action types', async () => {
+      mockPrisma.activity.create.mockResolvedValue({})
 
-      expect(mockJob.data!.action).toBe('project.created')
-    })
+      const actions = ['project.created', 'deployment.success', 'deployment.failed', 'user.login', 'organization.created']
 
-    it('should handle deployment.success action', () => {
-      mockJob.data!.action = 'deployment.success'
+      for (const action of actions) {
+        mockJob.data!.action = action
+        await processActivityLog(mockJob as Job<ActivityLogParams>)
 
-      expect(mockJob.data!.action).toBe('deployment.success')
-    })
-
-    it('should handle deployment.failed action', () => {
-      mockJob.data!.action = 'deployment.failed'
-
-      expect(mockJob.data!.action).toBe('deployment.failed')
-    })
-
-    it('should handle user.login action', () => {
-      mockJob.data!.action = 'user.login'
-
-      expect(mockJob.data!.action).toBe('user.login')
-    })
-
-    it('should handle organization.created action', () => {
-      mockJob.data!.action = 'organization.created'
-
-      expect(mockJob.data!.action).toBe('organization.created')
-    })
-  })
-
-  describe('Entity Types', () => {
-    it('should handle project entity', () => {
-      mockJob.data!.entityType = 'project'
-
-      expect(mockJob.data!.entityType).toBe('project')
-    })
-
-    it('should handle deployment entity', () => {
-      mockJob.data!.entityType = 'deployment'
-
-      expect(mockJob.data!.entityType).toBe('deployment')
-    })
-
-    it('should handle user entity', () => {
-      mockJob.data!.entityType = 'user'
-
-      expect(mockJob.data!.entityType).toBe('user')
-    })
-
-    it('should handle organization entity', () => {
-      mockJob.data!.entityType = 'organization'
-
-      expect(mockJob.data!.entityType).toBe('organization')
+        expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Logged activity: ${action}`))
+      }
     })
   })
 
   describe('Metadata Handling', () => {
-    it('should store complex metadata', () => {
+    it('should store complex metadata', async () => {
       mockJob.data!.metadata = {
         projectName: 'Test',
         template: 'Next.js',
         branches: ['main', 'dev'],
         settings: {
-          autoDeply: true,
+          autoDeploy: true,
         },
       }
+      mockPrisma.activity.create.mockResolvedValue({})
 
-      expect(mockJob.data!.metadata).toHaveProperty('projectName')
-      expect(mockJob.data!.metadata).toHaveProperty('template')
-      expect(mockJob.data!.metadata).toHaveProperty('branches')
-      expect(mockJob.data!.metadata).toHaveProperty('settings')
+      await processActivityLog(mockJob as Job<ActivityLogParams>)
+
+      expect(mockPrisma.activity.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: expect.objectContaining({
+              projectName: 'Test',
+              template: 'Next.js',
+            }),
+          }),
+        })
+      )
     })
 
-    it('should handle empty metadata', () => {
+    it('should handle empty metadata', async () => {
       mockJob.data!.metadata = {}
+      mockPrisma.activity.create.mockResolvedValue({})
 
-      expect(mockJob.data!.metadata).toEqual({})
-    })
+      await processActivityLog(mockJob as Job<ActivityLogParams>)
 
-    it('should handle undefined metadata', () => {
-      mockJob.data!.metadata = undefined
-
-      const metadata = mockJob.data!.metadata || {}
-
-      expect(metadata).toEqual({})
+      expect(mockPrisma.activity.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: {},
+          }),
+        })
+      )
     })
   })
 
@@ -202,33 +210,32 @@ describe('Activity Processor', () => {
         new Error('Database error')
       )
 
-      await expect(mockPrisma.activity.create({})).rejects.toThrow('Database error')
-    })
+      await expect(processActivityLog(mockJob as Job<ActivityLogParams>))
+        .rejects.toThrow('Database error')
 
-    it('should log errors', async () => {
-      const error = new Error('Test error')
-
-      expect(error.message).toBe('Test error')
-      expect(consoleErrorSpy).toBeDefined()
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to log activity'),
+        expect.any(Error)
+      )
     })
 
     it('should rethrow errors for retry', async () => {
-      const error = new Error('Retry this')
+      mockPrisma.activity.create.mockRejectedValue(
+        new Error('Retry this')
+      )
 
-      await expect(async () => {
-        throw error
-      }).rejects.toThrow('Retry this')
+      await expect(processActivityLog(mockJob as Job<ActivityLogParams>))
+        .rejects.toThrow('Retry this')
     })
   })
 
   describe('Worker Configuration', () => {
     it('should use high concurrency for activity logging', () => {
       const defaultConcurrency = parseInt(process.env.ACTIVITY_WORKER_CONCURRENCY || '10')
-
       expect(defaultConcurrency).toBe(10)
     })
 
-    it('should configure rate limiting', () => {
+    it('should configure rate limiting (100 jobs/second)', () => {
       const limiter = {
         max: 100,
         duration: 1000,
@@ -236,103 +243,6 @@ describe('Activity Processor', () => {
 
       expect(limiter.max).toBe(100)
       expect(limiter.duration).toBe(1000)
-    })
-
-    it('should allow 100 jobs per second', () => {
-      const maxPerSecond = 100
-
-      expect(maxPerSecond).toBe(100)
-    })
-
-    it('should configure redis connection', () => {
-      const connection = {}
-
-      expect(connection).toBeDefined()
-    })
-  })
-
-  describe('Job Processing', () => {
-    it('should log job completion', () => {
-      expect(consoleLogSpy).toBeDefined()
-    })
-
-    it('should log job failures', () => {
-      expect(consoleErrorSpy).toBeDefined()
-    })
-
-    it('should log worker startup', () => {
-      expect(consoleLogSpy).toBeDefined()
-    })
-
-    it('should log activity action and entity', () => {
-      const action = 'project.created'
-      const entityType = 'project'
-
-      expect(action).toBe('project.created')
-      expect(entityType).toBe('project')
-    })
-  })
-
-  describe('Context Information', () => {
-    it('should track organization context', () => {
-      const organizationId = mockJob.data!.organizationId
-
-      expect(organizationId).toBe('org-123')
-      expect(organizationId).toBeTruthy()
-    })
-
-    it('should track user context', () => {
-      const userId = mockJob.data!.userId
-
-      expect(userId).toBe('user-123')
-      expect(userId).toBeTruthy()
-    })
-
-    it('should track project context', () => {
-      const projectId = mockJob.data!.projectId
-
-      expect(projectId).toBe('proj-123')
-      expect(projectId).toBeTruthy()
-    })
-
-    it('should handle optional project context', () => {
-      mockJob.data!.projectId = undefined
-
-      expect(mockJob.data!.projectId).toBeUndefined()
-    })
-
-    it('should handle optional user context', () => {
-      mockJob.data!.userId = undefined
-
-      expect(mockJob.data!.userId).toBeUndefined()
-    })
-  })
-
-  describe('Request Context', () => {
-    it('should capture IP address', () => {
-      const ipAddress = mockJob.data!.ipAddress
-
-      expect(ipAddress).toBe('192.168.1.1')
-      expect(ipAddress).toMatch(/^\d+\.\d+\.\d+\.\d+$/)
-    })
-
-    it('should capture user agent', () => {
-      const userAgent = mockJob.data!.userAgent
-
-      expect(userAgent).toBe('Mozilla/5.0')
-      expect(userAgent).toBeTruthy()
-    })
-
-    it('should handle missing IP address', () => {
-      mockJob.data!.ipAddress = undefined
-
-      expect(mockJob.data!.ipAddress).toBeUndefined()
-    })
-
-    it('should handle missing user agent', () => {
-      mockJob.data!.userAgent = undefined
-
-      expect(mockJob.data!.userAgent).toBeUndefined()
     })
   })
 })
