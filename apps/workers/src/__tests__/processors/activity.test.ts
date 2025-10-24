@@ -8,6 +8,18 @@ const mockPrisma = {
   },
 }
 
+// Mock Worker to prevent Redis connection
+const mockWorkerClose = jest.fn().mockResolvedValue(undefined)
+const mockWorkerOn = jest.fn()
+
+jest.mock('bullmq', () => ({
+  ...jest.requireActual('bullmq'),
+  Worker: jest.fn().mockImplementation(() => ({
+    close: mockWorkerClose,
+    on: mockWorkerOn,
+  })),
+}))
+
 jest.mock('@temponest/database', () => ({
   prisma: mockPrisma,
 }))
@@ -17,7 +29,7 @@ jest.mock('../../config', () => ({
 }))
 
 // Import after all mocks are set up
-const { processActivityLog } = require('../../processors/activity')
+const { processActivityLog, activityWorker } = require('../../processors/activity')
 
 describe('Activity Processor', () => {
   let mockJob: Partial<Job<ActivityLogParams>>
@@ -51,6 +63,13 @@ describe('Activity Processor', () => {
   afterEach(() => {
     consoleLogSpy.mockRestore()
     consoleErrorSpy.mockRestore()
+  })
+
+  afterAll(async () => {
+    // Close the Worker to prevent hanging tests
+    if (activityWorker && activityWorker.close) {
+      await activityWorker.close()
+    }
   })
 
   describe('Activity Logging', () => {

@@ -11,6 +11,18 @@ const mockPrisma = {
 
 global.fetch = jest.fn()
 
+// Mock Worker to prevent Redis connection
+const mockWorkerClose = jest.fn().mockResolvedValue(undefined)
+const mockWorkerOn = jest.fn()
+
+jest.mock('bullmq', () => ({
+  ...jest.requireActual('bullmq'),
+  Worker: jest.fn().mockImplementation(() => ({
+    close: mockWorkerClose,
+    on: mockWorkerOn,
+  })),
+}))
+
 jest.mock('@temponest/database', () => ({
   prisma: mockPrisma,
 }))
@@ -25,7 +37,7 @@ jest.mock('../../config', () => ({
 }))
 
 // Import after all mocks are set up
-const { processWebhook } = require('../../processors/webhook')
+const { processWebhook, webhookWorker } = require('../../processors/webhook')
 
 describe('Webhook Processor', () => {
   let mockJob: Partial<Job<ProcessWebhookJob>>
@@ -58,6 +70,13 @@ describe('Webhook Processor', () => {
   afterEach(() => {
     consoleLogSpy.mockRestore()
     consoleErrorSpy.mockRestore()
+  })
+
+  afterAll(async () => {
+    // Close the Worker to prevent hanging tests
+    if (webhookWorker && webhookWorker.close) {
+      await webhookWorker.close()
+    }
   })
 
   describe('Successful Webhook Delivery', () => {
