@@ -54,7 +54,12 @@ describe('Deploy Processor', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
-    jest.useFakeTimers()
+
+    // Mock setTimeout to execute immediately
+    jest.spyOn(global, 'setTimeout').mockImplementation((fn: any) => {
+      if (typeof fn === 'function') fn()
+      return 0 as any
+    })
 
     consoleLogSpy = jest.spyOn(console, 'log').mockImplementation()
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
@@ -78,14 +83,14 @@ describe('Deploy Processor', () => {
         branch: 'main',
         commitSha: 'abc123',
       },
-      updateProgress: jest.fn(),
+      updateProgress: jest.fn().mockResolvedValue(undefined),
     }
   })
 
   afterEach(() => {
     consoleLogSpy.mockRestore()
     consoleErrorSpy.mockRestore()
-    jest.useRealTimers()
+    jest.restoreAllMocks()
   })
 
   describe('Simulated Deployment', () => {
@@ -117,7 +122,6 @@ describe('Deploy Processor', () => {
       const deploymentPromise = processDeployment(mockJob as Job<DeployProjectJob>)
 
       // Fast-forward through all simulation timeouts
-      await jest.runAllTimersAsync()
 
       const result = await deploymentPromise
 
@@ -162,7 +166,6 @@ describe('Deploy Processor', () => {
       mockPrisma.activity.create.mockResolvedValue({})
 
       const deploymentPromise = processDeployment(mockJob as Job<DeployProjectJob>)
-      await jest.runAllTimersAsync()
       await deploymentPromise
 
       expect(mockPrisma.deployment.update).toHaveBeenCalledWith({
@@ -186,7 +189,6 @@ describe('Deploy Processor', () => {
       mockPrisma.activity.create.mockResolvedValue({})
 
       const deploymentPromise = processDeployment(mockJob as Job<DeployProjectJob>)
-      await jest.runAllTimersAsync()
       await deploymentPromise
 
       expect(mockPrisma.activity.create).toHaveBeenCalledWith({
@@ -239,7 +241,6 @@ describe('Deploy Processor', () => {
       mockPrisma.activity.create.mockResolvedValue({})
 
       const deploymentPromise = processDeployment(mockJob as Job<DeployProjectJob>)
-      await jest.runAllTimersAsync()
       const result = await deploymentPromise
 
       expect(result.success).toBe(true)
@@ -283,7 +284,6 @@ describe('Deploy Processor', () => {
       mockPrisma.activity.create.mockResolvedValue({})
 
       const deploymentPromise = processDeployment(mockJob as Job<DeployProjectJob>)
-      await jest.runAllTimersAsync()
       await deploymentPromise
 
       expect(mockCoolifyService.createApplication).not.toHaveBeenCalled()
@@ -348,7 +348,6 @@ describe('Deploy Processor', () => {
 
       try {
         const deploymentPromise = processDeployment(mockJob as Job<DeployProjectJob>)
-      await jest.runAllTimersAsync()
       await deploymentPromise
       } catch (error) {
         // Expected to throw
@@ -396,7 +395,6 @@ describe('Deploy Processor', () => {
       mockPrisma.activity.create.mockResolvedValue({})
 
       const deploymentPromise = processDeployment(mockJob as Job<DeployProjectJob>)
-      await jest.runAllTimersAsync()
       await deploymentPromise
 
       expect(mockJob.updateProgress).toHaveBeenCalledWith(10)
@@ -422,7 +420,6 @@ describe('Deploy Processor', () => {
       mockPrisma.activity.create.mockResolvedValue({})
 
       const deploymentPromise = processDeployment(mockJob as Job<DeployProjectJob>)
-      await jest.runAllTimersAsync()
       const result = await deploymentPromise
 
       expect(result.url).toBe('https://my-project.temponest.app')
@@ -457,7 +454,6 @@ describe('Deploy Processor', () => {
       mockPrisma.activity.create.mockResolvedValue({})
 
       const deploymentPromise = processDeployment(mockJob as Job<DeployProjectJob>)
-      await jest.runAllTimersAsync()
       const result = await deploymentPromise
 
       expect(result.url).toBe('https://custom-domain.example.com')
@@ -493,7 +489,6 @@ describe('Deploy Processor', () => {
       mockPrisma.activity.create.mockResolvedValue({})
 
       const deploymentPromise = processDeployment(mockJob as Job<DeployProjectJob>)
-      await jest.runAllTimersAsync()
       await deploymentPromise
 
       expect(mockPrisma.deployment.update).toHaveBeenCalledWith(
@@ -523,7 +518,6 @@ describe('Deploy Processor', () => {
       mockPrisma.activity.create.mockResolvedValue({})
 
       const deploymentPromise = processDeployment(mockJob as Job<DeployProjectJob>)
-      await jest.runAllTimersAsync()
       await deploymentPromise
 
       expect(mockPrisma.project.update).toHaveBeenCalledWith({
