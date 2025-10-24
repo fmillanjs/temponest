@@ -26,6 +26,19 @@ jest.mock('../../config', () => ({
   config: mockConfig,
 }))
 
+// Mock email templates with full path to avoid module mapper issues
+jest.mock('../../../../../packages/email/src/templates/verification', () => ({
+  VerificationEmail: jest.fn(() => 'VerificationEmail'),
+}))
+
+jest.mock('../../../../../packages/email/src/templates/password-reset', () => ({
+  PasswordResetEmail: jest.fn(() => 'PasswordResetEmail'),
+}))
+
+jest.mock('../../../../../packages/email/src/templates/password-changed', () => ({
+  PasswordChangedEmail: jest.fn(() => 'PasswordChangedEmail'),
+}))
+
 // Import after all mocks are set up
 const { processEmail } = require('../../processors/email')
 
