@@ -1,0 +1,148 @@
+# Video Production Sub-Department Configuration
+# Part of Marketing Department
+
+department:
+  id: video_production
+  name: Video Production
+  description: "Creates video content for marketing campaigns, tutorials, and social media"
+  parent: marketing  # This is a sub-department of Marketing
+
+  # Sub-department specific budget (inherits from parent if not set)
+  budget:
+    tokens_per_task: 10000
+    monthly_limit: 300000
+
+  # Video Production agents
+  agents:
+    - id: video_producer
+      name: Video Producer
+      role: "Senior Video Producer"
+      provider: claude
+      model: claude-sonnet-4-20250514
+      temperature: 0.3
+      responsibilities:
+        - "Plan video content and storyboards"
+        - "Coordinate video production workflow"
+        - "Manage video project timelines"
+        - "Ensure brand consistency in video content"
+      tools:
+        - rag_search
+        - storyboard_generator
+        - project_planner
+
+    - id: script_writer
+      name: Script Writer
+      role: "Video Script Writer"
+      provider: claude
+      model: claude-sonnet-4-20250514
+      temperature: 0.5
+      responsibilities:
+        - "Write engaging video scripts"
+        - "Adapt marketing messages for video format"
+        - "Create tutorials and educational content scripts"
+        - "Write video descriptions and captions"
+      tools:
+        - rag_search
+        - script_formatter
+        - caption_generator
+
+    - id: video_editor_planner
+      name: Video Editor Planner
+      role: "Video Editing Coordinator"
+      provider: claude
+      model: claude-sonnet-4-20250514
+      temperature: 0.2
+      responsibilities:
+        - "Create detailed editing instructions"
+        - "Plan video structure and pacing"
+        - "Specify transitions, effects, and music"
+        - "Generate shot lists and b-roll requirements"
+      tools:
+        - rag_search
+        - timeline_planner
+        - music_selector
+
+  # Video Production workflows
+  workflows:
+    - id: create_marketing_video
+      name: "Create Marketing Video"
+      description: "Full video production workflow for marketing content"
+      trigger: manual
+      risk_level: medium
+      steps:
+        - agent: video_producer
+          task: "Define video concept, target audience, and key messages"
+          approval_required: false
+
+        - agent: script_writer
+          task: "Write video script based on concept"
+          approval_required: false
+
+        - agent: marketing.marketing_strategist  # Parent department agent
+          task: "Review script for brand alignment"
+          approval_required: true
+
+        - agent: video_producer
+          task: "Create storyboard and shot list"
+          approval_required: false
+
+        - agent: video_editor_planner
+          task: "Generate editing plan with timeline and effects"
+          approval_required: false
+
+        - agent: video_producer
+          task: "Final review and delivery package"
+          approval_required: true
+
+    - id: create_tutorial_video
+      name: "Create Tutorial/Educational Video"
+      description: "Create instructional video content"
+      trigger: manual
+      risk_level: low
+      steps:
+        - agent: script_writer
+          task: "Research topic and write tutorial script"
+          approval_required: false
+
+        - agent: video_editor_planner
+          task: "Plan screen recordings and demonstrations"
+          approval_required: false
+
+        - agent: video_producer
+          task: "Review and approve tutorial plan"
+          approval_required: true
+
+    - id: create_social_video
+      name: "Create Short-Form Social Video"
+      description: "Quick social media video (TikTok, Instagram Reels, YouTube Shorts)"
+      trigger: manual
+      risk_level: low
+      steps:
+        - agent: script_writer
+          task: "Write short-form script (30-60 seconds)"
+          approval_required: false
+
+        - agent: video_editor_planner
+          task: "Create editing plan for short-form content"
+          approval_required: false
+
+        - agent: marketing.social_media.social_manager
+          task: "Schedule posting across platforms"
+          approval_required: false
+
+  # Integration with other departments
+  integrations:
+    - department: marketing
+      shared_workflows:
+        - campaign_launch
+      shared_agents:
+        - marketing_strategist
+        - content_writer
+
+    - department: marketing.social_media
+      shared_workflows:
+        - social_content_calendar
+      data_exchange:
+        - video_assets
+        - captions
+        - hashtags

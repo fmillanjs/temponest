@@ -17,6 +17,8 @@ from settings import settings
 from agents.factory import AgentFactory
 from memory.rag import RAGMemory
 from memory.langfuse_tracer import LangfuseTracer
+from departments.manager import DepartmentManager
+from routers import departments as departments_router
 
 
 # Request/Response Models
@@ -52,13 +54,14 @@ rag_memory: Optional[RAGMemory] = None
 langfuse_tracer: Optional[LangfuseTracer] = None
 overseer_agent: Optional[Any] = None  # Can be OverseerAgent or future OverseerAgentV2
 developer_agent: Optional[Any] = None  # Can be DeveloperAgent or DeveloperAgentV2
+department_manager: Optional[DepartmentManager] = None
 idempotency_cache: Dict[str, AgentResponse] = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic"""
-    global rag_memory, langfuse_tracer, overseer_agent, developer_agent
+    global rag_memory, langfuse_tracer, overseer_agent, developer_agent, department_manager
 
     # Startup
     print("🚀 Starting Agent Service...")
@@ -78,7 +81,7 @@ async def lifespan(app: FastAPI):
         host=settings.LANGFUSE_HOST
     )
 
-    # Initialize agents using factory (provider-aware)
+    # Initialize legacy agents (backward compatibility)
     print(f"   Overseer Provider: {settings.OVERSEER_PROVIDER}")
     print(f"   Developer Provider: {settings.DEVELOPER_PROVIDER}")
 
@@ -91,6 +94,20 @@ async def lifespan(app: FastAPI):
         rag_memory=rag_memory,
         tracer=langfuse_tracer
     )
+
+    # Initialize Department Manager (new organizational structure)
+    print("\n🏢 Loading Organizational Structure...")
+    import os
+    config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "config", "departments")
+    department_manager = DepartmentManager(
+        config_dir=config_dir,
+        rag_memory=rag_memory,
+        tracer=langfuse_tracer
+    )
+    await department_manager.load_all_departments()
+
+    # Inject department manager into router
+    departments_router.set_department_manager(department_manager)
 
     print("✅ Agent Service ready!")
 
@@ -117,6 +134,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(departments_router.router)
 
 
 # Token counting utility

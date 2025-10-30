@@ -1,0 +1,90 @@
+# Marketing Department Configuration
+# Edit this file to customize the Marketing department and its teams
+
+department:
+  id: marketing
+  name: Marketing
+  description: "Handles all marketing, content creation, and brand activities"
+  parent: null  # Top-level department
+
+  # Department-level configuration
+  budget:
+    tokens_per_task: 8000
+    monthly_limit: 1000000
+
+  # Department agents (available to all sub-departments)
+  agents:
+    - id: marketing_strategist
+      name: Marketing Strategist
+      role: "Senior Marketing Strategist"
+      provider: claude
+      model: claude-sonnet-4-20250514
+      temperature: 0.3
+      responsibilities:
+        - "Develop marketing strategies and campaigns"
+        - "Analyze market trends and competitor activities"
+        - "Create marketing plans aligned with business goals"
+        - "Coordinate with sub-departments for campaign execution"
+      tools:
+        - rag_search
+        - market_research
+        - analytics_dashboard
+
+    - id: content_writer
+      name: Content Writer
+      role: "Senior Content Writer"
+      provider: claude
+      model: claude-sonnet-4-20250514
+      temperature: 0.4
+      responsibilities:
+        - "Write blog posts, articles, and marketing copy"
+        - "Create social media content"
+        - "Develop email marketing campaigns"
+        - "Maintain brand voice and tone"
+      tools:
+        - rag_search
+        - grammar_check
+        - seo_optimizer
+
+  # Sub-departments
+  sub_departments:
+    - video_production
+    - social_media
+    - email_marketing
+
+  # Department workflows
+  workflows:
+    - id: campaign_launch
+      name: "Launch Marketing Campaign"
+      description: "End-to-end campaign launch workflow"
+      trigger: manual
+      risk_level: medium
+      steps:
+        - agent: marketing_strategist
+          task: "Develop campaign strategy and goals"
+          approval_required: true
+        - agent: content_writer
+          task: "Create campaign messaging and copy"
+          approval_required: false
+        - agent: video_production.video_producer  # Sub-department agent
+          task: "Create campaign video assets"
+          approval_required: true
+        - agent: social_media.social_manager
+          task: "Schedule and publish social media posts"
+          approval_required: false
+
+    - id: content_creation
+      name: "Create Marketing Content"
+      description: "Generate blog posts, articles, and content"
+      trigger: manual
+      risk_level: low
+      steps:
+        - agent: content_writer
+          task: "Research topic and create outline"
+          approval_required: false
+        - agent: content_writer
+          task: "Write full article with SEO optimization"
+          approval_required: false
+        - agent: marketing_strategist
+          task: "Review and approve content"
+          approval_required: true

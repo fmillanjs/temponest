@@ -1,0 +1,61 @@
+# Social Media Sub-Department Configuration
+# Part of Marketing Department
+
+department:
+  id: social_media
+  name: Social Media
+  description: "Manages social media presence, engagement, and content distribution"
+  parent: marketing
+
+  budget:
+    tokens_per_task: 6000
+    monthly_limit: 200000
+
+  agents:
+    - id: social_manager
+      name: Social Media Manager
+      role: "Social Media Manager"
+      provider: claude
+      model: claude-sonnet-4-20250514
+      temperature: 0.4
+      responsibilities:
+        - "Plan and schedule social media content"
+        - "Manage social media calendar"
+        - "Monitor engagement and analytics"
+        - "Respond to comments and messages"
+      tools:
+        - rag_search
+        - analytics_dashboard
+        - scheduling_tool
+
+    - id: community_manager
+      name: Community Manager
+      role: "Community Manager"
+      provider: claude
+      model: claude-sonnet-4-20250514
+      temperature: 0.5
+      responsibilities:
+        - "Engage with community members"
+        - "Moderate discussions"
+        - "Build brand loyalty"
+        - "Handle customer feedback"
+      tools:
+        - rag_search
+        - sentiment_analysis
+
+  workflows:
+    - id: social_content_calendar
+      name: "Create Social Media Content Calendar"
+      description: "Plan and schedule social content for the month"
+      trigger: schedule
+      risk_level: low
+      steps:
+        - agent: social_manager
+          task: "Analyze past performance and trends"
+          approval_required: false
+        - agent: marketing.content_writer
+          task: "Create social post copy"
+          approval_required: false
+        - agent: social_manager
+          task: "Schedule posts across platforms"
+          approval_required: true
