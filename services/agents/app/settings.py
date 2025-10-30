@@ -4,7 +4,7 @@ Loads from environment variables with validation.
 """
 
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, Literal
 
 
 class Settings(BaseSettings):
@@ -21,15 +21,37 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: Optional[str] = None
     LANGFUSE_HOST: str = "http://langfuse:3000"
 
-    # Models
-    CHAT_MODEL: str = "mistral:7b-instruct"
-    CODE_MODEL: str = "qwen2.5-coder:7b"
+    # Model Provider Selection
+    # overseer: which provider for Overseer agent (ollama, claude, openai)
+    # developer: which provider for Developer agent (ollama, claude, openai)
+    OVERSEER_PROVIDER: Literal["ollama", "claude", "openai"] = "ollama"
+    DEVELOPER_PROVIDER: Literal["ollama", "claude", "openai"] = "claude"
+
+    # Ollama Models (when provider=ollama)
+    OLLAMA_CHAT_MODEL: str = "mistral:7b-instruct"
+    OLLAMA_CODE_MODEL: str = "qwen2.5-coder:7b"
     EMBEDDING_MODEL: str = "nomic-embed-text"
 
-    # Model Parameters
+    # Claude API Configuration (when provider=claude)
+    # URL-based authentication (like opencode.ai)
+    CLAUDE_AUTH_URL: Optional[str] = None  # e.g., "https://opencode.ai/api/auth"
+    CLAUDE_SESSION_TOKEN: Optional[str] = None  # Session token from auth URL
+    CLAUDE_API_URL: str = "https://api.anthropic.com/v1/messages"
+
+    # Claude Models
+    CLAUDE_CHAT_MODEL: str = "claude-sonnet-4-20250514"
+    CLAUDE_CODE_MODEL: str = "claude-sonnet-4-20250514"
+
+    # OpenAI Configuration (when provider=openai)
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_CHAT_MODEL: str = "gpt-4-turbo-preview"
+    OPENAI_CODE_MODEL: str = "gpt-4-turbo-preview"
+
+    # Model Parameters (apply to all providers)
     MODEL_TEMPERATURE: float = 0.2
     MODEL_TOP_P: float = 0.9
-    MODEL_MAX_TOKENS: int = 2048
+    MODEL_MAX_TOKENS: int = 4096
     MODEL_SEED: int = 42
 
     # RAG
@@ -47,6 +69,28 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+
+    def get_model_for_agent(self, agent_type: str) -> str:
+        """Get the appropriate model based on agent type and provider"""
+        if agent_type == "overseer":
+            provider = self.OVERSEER_PROVIDER
+            if provider == "ollama":
+                return self.OLLAMA_CHAT_MODEL
+            elif provider == "claude":
+                return self.CLAUDE_CHAT_MODEL
+            elif provider == "openai":
+                return self.OPENAI_CHAT_MODEL
+        elif agent_type == "developer":
+            provider = self.DEVELOPER_PROVIDER
+            if provider == "ollama":
+                return self.OLLAMA_CODE_MODEL
+            elif provider == "claude":
+                return self.CLAUDE_CODE_MODEL
+            elif provider == "openai":
+                return self.OPENAI_CODE_MODEL
+
+        # Fallback to ollama
+        return self.OLLAMA_CHAT_MODEL if agent_type == "overseer" else self.OLLAMA_CODE_MODEL
 
 
 settings = Settings()

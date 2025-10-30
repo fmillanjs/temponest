@@ -14,8 +14,7 @@ from pydantic import BaseModel, Field
 import tiktoken
 
 from settings import settings
-from agents.overseer import OverseerAgent
-from agents.developer import DeveloperAgent
+from agents.factory import AgentFactory
 from memory.rag import RAGMemory
 from memory.langfuse_tracer import LangfuseTracer
 
@@ -51,8 +50,8 @@ class HealthResponse(BaseModel):
 # Global state
 rag_memory: Optional[RAGMemory] = None
 langfuse_tracer: Optional[LangfuseTracer] = None
-overseer_agent: Optional[OverseerAgent] = None
-developer_agent: Optional[DeveloperAgent] = None
+overseer_agent: Optional[Any] = None  # Can be OverseerAgent or future OverseerAgentV2
+developer_agent: Optional[Any] = None  # Can be DeveloperAgent or DeveloperAgentV2
 idempotency_cache: Dict[str, AgentResponse] = {}
 
 
@@ -79,25 +78,18 @@ async def lifespan(app: FastAPI):
         host=settings.LANGFUSE_HOST
     )
 
-    # Initialize agents
-    overseer_agent = OverseerAgent(
+    # Initialize agents using factory (provider-aware)
+    print(f"   Overseer Provider: {settings.OVERSEER_PROVIDER}")
+    print(f"   Developer Provider: {settings.DEVELOPER_PROVIDER}")
+
+    overseer_agent = AgentFactory.create_overseer(
         rag_memory=rag_memory,
-        tracer=langfuse_tracer,
-        chat_model=settings.CHAT_MODEL,
-        temperature=settings.MODEL_TEMPERATURE,
-        top_p=settings.MODEL_TOP_P,
-        max_tokens=settings.MODEL_MAX_TOKENS,
-        seed=settings.MODEL_SEED
+        tracer=langfuse_tracer
     )
 
-    developer_agent = DeveloperAgent(
+    developer_agent = AgentFactory.create_developer(
         rag_memory=rag_memory,
-        tracer=langfuse_tracer,
-        code_model=settings.CODE_MODEL,
-        temperature=settings.MODEL_TEMPERATURE,
-        top_p=settings.MODEL_TOP_P,
-        max_tokens=settings.MODEL_MAX_TOKENS,
-        seed=settings.MODEL_SEED
+        tracer=langfuse_tracer
     )
 
     print("✅ Agent Service ready!")
@@ -174,8 +166,10 @@ async def health_check():
         status="healthy" if all(v in ["healthy", "ready"] for v in services.values()) else "degraded",
         services=services,
         models={
-            "chat": settings.CHAT_MODEL,
-            "code": settings.CODE_MODEL,
+            "overseer_provider": settings.OVERSEER_PROVIDER,
+            "overseer_model": settings.get_model_for_agent("overseer"),
+            "developer_provider": settings.DEVELOPER_PROVIDER,
+            "developer_model": settings.get_model_for_agent("developer"),
             "embedding": settings.EMBEDDING_MODEL
         }
     )
