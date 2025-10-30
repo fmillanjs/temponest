@@ -1,5 +1,5 @@
 # Vector Database
-qdrant-client==1.7.3
+qdrant-client==1.9.2
 
 # HTTP Client
 httpx==0.26.0

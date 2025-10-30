@@ -58,12 +58,22 @@ class DocumentProcessor:
         self.processed_files = set()
         self._ensure_collection()
 
-    def _ensure_collection(self):
-        """Create collection if it doesn't exist"""
+    def _collection_exists(self, name: str) -> bool:
+        """Check if collection exists"""
         try:
-            self.qdrant.get_collection(COLLECTION_NAME)
+            collections = self.qdrant.get_collections()
+            return any(col.name == name for col in collections.collections)
+        except Exception as e:
+            print(f"⚠️  Error checking collections: {e}")
+            return False
+
+    def _ensure_collection(self):
+        """Create collection if it doesn't exist (idempotent)"""
+        if self._collection_exists(COLLECTION_NAME):
             print(f"✅ Collection '{COLLECTION_NAME}' exists")
-        except (UnexpectedResponse, Exception):
+            return
+
+        try:
             print(f"📝 Creating collection '{COLLECTION_NAME}'...")
             self.qdrant.create_collection(
                 collection_name=COLLECTION_NAME,
@@ -73,6 +83,11 @@ class DocumentProcessor:
                 )
             )
             print(f"✅ Collection '{COLLECTION_NAME}' created")
+        except UnexpectedResponse as e:
+            if "already exists" in str(e).lower():
+                print(f"✅ Collection '{COLLECTION_NAME}' already exists")
+            else:
+                raise
 
     async def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding using Ollama"""
@@ -287,8 +302,12 @@ async def main():
         while True:
             await asyncio.sleep(60)
             # Periodically check collection size
-            collection_info = processor.qdrant.get_collection(COLLECTION_NAME)
-            print(f"📊 Collection size: {collection_info.points_count} vectors")
+            try:
+                collection_info = processor.qdrant.get_collection(COLLECTION_NAME)
+                points_count = getattr(collection_info, 'points_count', 'unknown')
+                print(f"📊 Collection size: {points_count} vectors")
+            except Exception as e:
+                print(f"⚠️  Could not get collection stats: {e}")
     except KeyboardInterrupt:
         observer.stop()
         print("\n🛑 Stopping ingestion service...")

@@ -14,5 +14,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . /app
 
-# Run the ingestion service
-CMD ["python", "ingest.py"]
+# Run the ingestion service (unbuffered for Docker logs)
+CMD ["python", "-u", "ingest.py"]
