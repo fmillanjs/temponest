@@ -1,0 +1,230 @@
+{
+  "name": "Telegram Approval Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "approval",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook - Approval Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "approval-webhook"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_chat_id || $env.TELEGRAM_ADMIN_CHAT_ID }}",
+        "text": "🤖 **New Approval Request**\n\n📋 Task: {{ $json.task }}\n\n⚠️ Risk Level: {{ $json.risk_level }}\n\n🆔 Approval ID: `{{ $json.approval_id }}`\n\n🔗 Review: {{ $env.APPROVAL_UI_URL }}/approval/{{ $json.approval_id }}",
+        "additionalFields": {
+          "parse_mode": "Markdown",
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "✅ Approve",
+                  "callback_data": "approve:{{ $json.approval_id }}"
+                },
+                {
+                  "text": "❌ Deny",
+                  "callback_data": "deny:{{ $json.approval_id }}"
+                }
+              ],
+              [
+                {
+                  "text": "🔍 View Details",
+                  "url": "{{ $env.APPROVAL_UI_URL }}/approval/{{ $json.approval_id }}"
+                }
+              ]
+            ]
+          }
+        }
+      },
+      "id": "telegram-send",
+      "name": "Send Telegram Notification",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": {
+          "status": "notification_sent",
+          "approval_id": "={{ $json.approval_id }}"
+        }
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "updates": ["callback_query"]
+      },
+      "id": "telegram-trigger",
+      "name": "Telegram Callback Handler",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [250, 500],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.callback_query.data.split(':')[0] }}",
+              "operation": "equals",
+              "value2": "approve"
+            }
+          ]
+        }
+      },
+      "id": "if-approve",
+      "name": "If Approve",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.APPROVAL_UI_URL }}/api/approvals/{{ $json.callback_query.data.split(':')[1] }}/approve",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "approver",
+              "value": "={{ $json.callback_query.from.username || $json.callback_query.from.first_name }}"
+            },
+            {
+              "name": "reason",
+              "value": "Approved via Telegram"
+            }
+          ]
+        }
+      },
+      "id": "http-approve",
+      "name": "Submit Approval",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.callback_query.message.chat.id }}",
+        "messageType": "editMessage",
+        "messageId": "={{ $json.callback_query.message.message_id }}",
+        "text": "{{ $json.callback_query.message.text }}\n\n✅ **APPROVED** by @{{ $json.callback_query.from.username || $json.callback_query.from.first_name }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-update-approved",
+      "name": "Update Message - Approved",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [850, 400],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.APPROVAL_UI_URL }}/api/approvals/{{ $json.callback_query.data.split(':')[1] }}/deny",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "approver",
+              "value": "={{ $json.callback_query.from.username || $json.callback_query.from.first_name }}"
+            },
+            {
+              "name": "reason",
+              "value": "Denied via Telegram"
+            }
+          ]
+        }
+      },
+      "id": "http-deny",
+      "name": "Submit Denial",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [650, 600]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.callback_query.message.chat.id }}",
+        "messageType": "editMessage",
+        "messageId": "={{ $json.callback_query.message.message_id }}",
+        "text": "{{ $json.callback_query.message.text }}\n\n❌ **DENIED** by @{{ $json.callback_query.from.username || $json.callback_query.from.first_name }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-update-denied",
+      "name": "Update Message - Denied",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [850, 600],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - Approval Request": {
+      "main": [[{"node": "Send Telegram Notification", "type": "main", "index": 0}]]
+    },
+    "Send Telegram Notification": {
+      "main": [[{"node": "Webhook Response", "type": "main", "index": 0}]]
+    },
+    "Telegram Callback Handler": {
+      "main": [[{"node": "If Approve", "type": "main", "index": 0}]]
+    },
+    "If Approve": {
+      "main": [
+        [{"node": "Submit Approval", "type": "main", "index": 0}],
+        [{"node": "Submit Denial", "type": "main", "index": 0}]
+      ]
+    },
+    "Submit Approval": {
+      "main": [[{"node": "Update Message - Approved", "type": "main", "index": 0}]]
+    },
+    "Submit Denial": {
+      "main": [[{"node": "Update Message - Denied", "type": "main", "index": 0}]]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "versionId": "1",
+  "id": "telegram-approval-workflow",
+  "meta": {
+    "instanceId": "agentic-company"
+  },
+  "tags": []
+}

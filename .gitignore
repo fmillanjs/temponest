@@ -1,0 +1,103 @@
+# Agentic Company Platform - .gitignore
+
+# Environment files (CRITICAL - never commit secrets)
+.env
+.env.local
+.env.*.local
+docker/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.log
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker volumes and data
+docker/documents/*
+!docker/documents/.gitkeep
+docker/agent-output/*
+!docker/agent-output/.gitkeep
+docker/open-webui-data/
+docker/temporal-data/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+*.out
+
+# Secrets and keys (CRITICAL)
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+id_rsa*
+credentials.json
+service-account*.json
+.aws/
+.gcp/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+.cache/
+
+# OS files
+Thumbs.db
+.DS_Store
+.Spotlight-V100
+.Trashes
+
+# n8n data (may contain secrets)
+services/n8n/.n8n/
+
+# Keep these example files
+!docker/.env.example
+!**/.env.example
+!**/.env.template

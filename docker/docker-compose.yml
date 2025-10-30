@@ -1,0 +1,276 @@
+version: '3.8'
+
+networks:
+  agentic-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  qdrant-data:
+  ollama-data:
+  n8n-data:
+  temporal-data:
+
+services:
+  # PostgreSQL - shared by Temporal and Langfuse
+  postgres:
+    image: postgres:16-alpine
+    container_name: agentic-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-agentic}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - agentic-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Temporal Server
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    container_name: agentic-temporal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_SEEDS=postgres
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    ports:
+      - "7233:7233"
+      - "8080:8080"
+    networks:
+      - agentic-network
+    volumes:
+      - temporal-data:/etc/temporal
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "workflow", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: agentic-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - agentic-network
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Langfuse - LLM Observability
+  langfuse:
+    image: langfuse/langfuse:2
+    container_name: agentic-langfuse
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/langfuse
+      - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET:-super-secret-key-change-in-production}
+      - NEXTAUTH_URL=${LANGFUSE_NEXTAUTH_URL:-http://localhost:3000}
+      - SALT=${LANGFUSE_SALT:-super-secret-salt-change-in-production}
+      - TELEMETRY_ENABLED=${LANGFUSE_TELEMETRY_ENABLED:-false}
+    networks:
+      - agentic-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/public/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Ollama - Local LLM Runtime
+  ollama:
+    image: ollama/ollama:latest
+    container_name: agentic-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - agentic-network
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Open WebUI - Chat Interface
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: agentic-open-webui
+    depends_on:
+      - ollama
+    ports:
+      - "8081:8080"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-super-secret-webui-key}
+    volumes:
+      - ./open-webui-data:/app/backend/data
+    networks:
+      - agentic-network
+    restart: unless-stopped
+
+  # n8n - Workflow Automation
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: agentic-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-admin}
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=${TZ:-UTC}
+    volumes:
+      - n8n-data:/home/node/.n8n
+      - ../services/n8n:/etc/n8n/workflows
+    networks:
+      - agentic-network
+    restart: unless-stopped
+
+  # Agent Service - CrewAI with Overseer + Developer
+  agents:
+    build:
+      context: ../services/agents
+      dockerfile: Dockerfile
+    container_name: agentic-agents
+    depends_on:
+      ollama:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      langfuse:
+        condition: service_healthy
+    ports:
+      - "9000:9000"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - QDRANT_URL=http://qdrant:6333
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=http://langfuse:3000
+      - BUDGET_TOKENS_PER_TASK=${BUDGET_TOKENS_PER_TASK:-8000}
+      - LATENCY_SLO_MS=${LATENCY_SLO_MS:-5000}
+      - RAG_TOP_K=${RAG_TOP_K:-5}
+      - RAG_MIN_SCORE=${RAG_MIN_SCORE:-0.7}
+      - CHAT_MODEL=${CHAT_MODEL:-mistral:7b-instruct}
+      - CODE_MODEL=${CODE_MODEL:-qwen2.5-coder:7b}
+      - MODEL_TEMPERATURE=${MODEL_TEMPERATURE:-0.2}
+      - MODEL_TOP_P=${MODEL_TOP_P:-0.9}
+      - MODEL_MAX_TOKENS=${MODEL_MAX_TOKENS:-2048}
+      - MODEL_SEED=${MODEL_SEED:-42}
+    volumes:
+      - ../services/agents:/app
+      - ./agent-output:/output
+    networks:
+      - agentic-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Temporal Workers - Workflow Execution
+  temporal-workers:
+    build:
+      context: ../services/temporal_workers
+      dockerfile: Dockerfile
+    container_name: agentic-temporal-workers
+    depends_on:
+      temporal:
+        condition: service_healthy
+      agents:
+        condition: service_healthy
+    environment:
+      - TEMPORAL_HOST=temporal:7233
+      - TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE:-default}
+      - AGENTS_URL=http://agents:9000
+      - APPROVAL_UI_URL=http://approval-ui:9001
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://n8n:5678/webhook/approval}
+    volumes:
+      - ../services/temporal_workers:/app
+    networks:
+      - agentic-network
+    restart: unless-stopped
+
+  # Approval UI - Web Interface for Human Approvals
+  approval-ui:
+    build:
+      context: ../services/approval_ui
+      dockerfile: Dockerfile
+    container_name: agentic-approval-ui
+    depends_on:
+      - postgres
+    ports:
+      - "9001:9001"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/approvals
+      - TEMPORAL_HOST=temporal:7233
+      - SECRET_KEY=${APPROVAL_UI_SECRET_KEY:-super-secret-approval-key}
+    volumes:
+      - ../services/approval_ui:/app
+    networks:
+      - agentic-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Ingestion Service - RAG Document Processing
+  ingestion:
+    build:
+      context: ../services/ingestion
+      dockerfile: Dockerfile
+    container_name: agentic-ingestion
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-nomic-embed-text}
+      - WATCH_DIR=/data/documents
+    volumes:
+      - ../services/ingestion:/app
+      - ./documents:/data/documents
+    networks:
+      - agentic-network
+    restart: unless-stopped
