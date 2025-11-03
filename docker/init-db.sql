@@ -1,4 +1,4 @@
--- Initialize databases for Temporal, Langfuse, and Approvals
+-- Initialize databases for Temporal, Langfuse, Approvals, and Agentic
 -- This script runs on first PostgreSQL startup
 
 -- Create Langfuse database
@@ -8,10 +8,12 @@ CREATE DATABASE langfuse;
 CREATE DATABASE approvals;
 
 -- Note: Temporal database is created by the temporal auto-setup container
+-- Note: Agentic database is the default database (created by POSTGRES_DB env var)
 
 -- Grant privileges
 GRANT ALL PRIVILEGES ON DATABASE langfuse TO postgres;
 GRANT ALL PRIVILEGES ON DATABASE approvals TO postgres;
+GRANT ALL PRIVILEGES ON DATABASE agentic TO postgres;
 
 \c approvals;
 
@@ -47,3 +49,9 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 CREATE INDEX idx_audit_approval ON audit_log(approval_id);
 CREATE INDEX idx_audit_created ON audit_log(created_at DESC);
+
+-- Switch to agentic database for auth system tables
+\c agentic;
+
+-- Run auth system migration
+\i /docker-entrypoint-initdb.d/migrations/002_auth_system.sql

@@ -10,6 +10,7 @@ volumes:
   ollama-data:
   n8n-data:
   temporal-data:
+  redis-data:
 
 services:
   # PostgreSQL - shared by Temporal and Langfuse
@@ -23,6 +24,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./migrations:/docker-entrypoint-initdb.d/migrations
     ports:
       - "5434:5432"
     networks:
@@ -32,6 +34,53 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Redis - Caching and Rate Limiting
+  redis:
+    image: redis:7-alpine
+    container_name: agentic-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - agentic-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Auth Service - Authentication and Authorization
+  auth:
+    build:
+      context: ../services/auth
+      dockerfile: Dockerfile
+    container_name: agentic-auth
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "9002:9002"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/agentic
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-CHANGE-ME-IN-PRODUCTION-USE-LONG-RANDOM-STRING}
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      - JWT_REFRESH_TOKEN_EXPIRE_DAYS=${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-30}
+    volumes:
+      - ../services/auth/app:/app/app
+    networks:
+      - agentic-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9002/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Temporal Server
   temporal:
