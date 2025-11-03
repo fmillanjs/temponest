@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import List, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, Form
+from fastapi import FastAPI, HTTPException, Request, Form, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -22,11 +22,16 @@ from pydantic import BaseModel
 import asyncpg
 from temporalio.client import Client as TemporalClient
 
+from auth_client import AuthClient, AuthContext
+from auth_middleware import set_auth_client, get_current_user, require_permission
+
 
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@postgres:5432/approvals")
 TEMPORAL_HOST = os.getenv("TEMPORAL_HOST", "temporal:7233")
 SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-approval-key")
+AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth:9002")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-min-32-chars-long")
 
 
 # Models
@@ -59,6 +64,14 @@ async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Starting Approval UI...")
 
+    # Initialize auth client
+    auth_client = AuthClient(
+        auth_service_url=AUTH_SERVICE_URL,
+        jwt_secret=JWT_SECRET_KEY
+    )
+    set_auth_client(auth_client)
+    print(f"✅ Auth client configured: {AUTH_SERVICE_URL}")
+
     # Connect to database
     db_pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
     print("✅ Connected to database")
@@ -73,6 +86,8 @@ async def lifespan(app: FastAPI):
     print("🛑 Shutting down Approval UI...")
     if db_pool:
         await db_pool.close()
+    if auth_client:
+        await auth_client.close()
 
 
 app = FastAPI(
@@ -94,9 +109,15 @@ async def health_check():
 
 
 @app.post("/api/approvals", response_model=ApprovalResponse)
-async def create_approval(request: ApprovalRequest):
-    """Create a new approval request"""
+async def create_approval(
+    request: ApprovalRequest,
+    current_user: AuthContext = Depends(require_permission("workflows:create"))
+):
+    """
+    Create a new approval request.
 
+    Requires: workflows:create permission
+    """
     if not db_pool:
         raise HTTPException(status_code=503, detail="Database not available")
 
@@ -125,9 +146,15 @@ async def create_approval(request: ApprovalRequest):
 
 
 @app.get("/api/approvals/{approval_id}", response_model=ApprovalResponse)
-async def get_approval(approval_id: str):
-    """Get approval status"""
+async def get_approval(
+    approval_id: str,
+    current_user: AuthContext = Depends(require_permission("approvals:read"))
+):
+    """
+    Get approval status.
 
+    Requires: approvals:read permission
+    """
     if not db_pool:
         raise HTTPException(status_code=503, detail="Database not available")
 
@@ -153,9 +180,15 @@ async def get_approval(approval_id: str):
 
 
 @app.get("/api/approvals", response_model=List[dict])
-async def list_approvals(status: Optional[str] = None):
-    """List all approval requests, optionally filtered by status"""
+async def list_approvals(
+    status: Optional[str] = None,
+    current_user: AuthContext = Depends(require_permission("approvals:read"))
+):
+    """
+    List all approval requests, optionally filtered by status.
 
+    Requires: approvals:read permission
+    """
     if not db_pool:
         raise HTTPException(status_code=503, detail="Database not available")
 
@@ -187,9 +220,17 @@ async def list_approvals(status: Optional[str] = None):
 
 
 @app.post("/api/approvals/{approval_id}/approve")
-async def approve_task(approval_id: str, approver: str = Form(...), reason: str = Form("")):
-    """Approve a task and send signal to Temporal workflow"""
+async def approve_task(
+    approval_id: str,
+    approver: str = Form(...),
+    reason: str = Form(""),
+    current_user: AuthContext = Depends(require_permission("approvals:approve"))
+):
+    """
+    Approve a task and send signal to Temporal workflow.
 
+    Requires: approvals:approve permission
+    """
     if not db_pool or not temporal_client:
         raise HTTPException(status_code=503, detail="Service not available")
 
@@ -252,9 +293,17 @@ async def approve_task(approval_id: str, approver: str = Form(...), reason: str 
 
 
 @app.post("/api/approvals/{approval_id}/deny")
-async def deny_task(approval_id: str, approver: str = Form(...), reason: str = Form(...)):
-    """Deny a task and send signal to Temporal workflow"""
+async def deny_task(
+    approval_id: str,
+    approver: str = Form(...),
+    reason: str = Form(...),
+    current_user: AuthContext = Depends(require_permission("approvals:approve"))
+):
+    """
+    Deny a task and send signal to Temporal workflow.
 
+    Requires: approvals:approve permission
+    """
     if not db_pool or not temporal_client:
         raise HTTPException(status_code=503, detail="Service not available")
 

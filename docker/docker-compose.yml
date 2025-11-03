@@ -292,6 +292,8 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/approvals
       - TEMPORAL_HOST=temporal:7233
       - SECRET_KEY=${APPROVAL_UI_SECRET_KEY:-super-secret-approval-key}
+      - AUTH_SERVICE_URL=http://auth:9002
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-CHANGE-ME-IN-PRODUCTION-USE-LONG-RANDOM-STRING}
     volumes:
       - ../services/approval_ui:/app
     networks:
