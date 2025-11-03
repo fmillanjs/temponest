@@ -2,19 +2,21 @@
 Authentication routes (login, register, refresh token).
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Request
 from datetime import datetime
 from app.models import LoginRequest, TokenResponse, RefreshTokenRequest, RegisterRequest, UserResponse
 from app.handlers import JWTHandler, PasswordHandler
 from app.database import db
 from app.middleware import get_user_roles, get_user_permissions
+from app.limiter import limiter
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest):
+@limiter.limit("5/minute")  # Strict limit on login to prevent brute force
+async def login(request: Request, login_request: LoginRequest):
     """
     User login with email and password.
     Returns JWT access and refresh tokens.
@@ -28,7 +30,7 @@ async def login(request: LoginRequest):
         JOIN tenants t ON u.tenant_id = t.id
         WHERE u.email = $1 AND t.is_active = true
         """,
-        request.email
+        login_request.email
     )
 
     if not user:
@@ -38,7 +40,7 @@ async def login(request: LoginRequest):
         )
 
     # Verify password
-    if not PasswordHandler.verify_password(request.password, user["hashed_password"]):
+    if not PasswordHandler.verify_password(login_request.password, user["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
@@ -94,12 +96,13 @@ async def login(request: LoginRequest):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(request: RefreshTokenRequest):
+@limiter.limit("10/minute")  # Moderate limit on token refresh
+async def refresh_token(request: Request, refresh_request: RefreshTokenRequest):
     """
     Refresh access token using refresh token.
     """
     # Verify refresh token
-    payload = JWTHandler.verify_token(request.refresh_token, expected_type="refresh")
+    payload = JWTHandler.verify_token(refresh_request.refresh_token, expected_type="refresh")
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -142,13 +145,14 @@ async def refresh_token(request: RefreshTokenRequest):
     from app.settings import settings
     return TokenResponse(
         access_token=access_token,
-        refresh_token=request.refresh_token,  # Keep same refresh token
+        refresh_token=refresh_request.refresh_token,  # Keep same refresh token
         expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(request: RegisterRequest):
+@limiter.limit("3/hour")  # Very strict limit on registration to prevent spam
+async def register(request: Request, register_request: RegisterRequest):
     """
     Register a new user.
     If tenant_id is provided, join that tenant. Otherwise, create new tenant.
@@ -156,7 +160,7 @@ async def register(request: RegisterRequest):
     # Check if email already exists
     existing = await db.fetchval(
         "SELECT id FROM users WHERE email = $1",
-        request.email
+        register_request.email
     )
 
     if existing:
@@ -166,20 +170,20 @@ async def register(request: RegisterRequest):
         )
 
     # Hash password
-    hashed_password = PasswordHandler.hash_password(request.password)
+    hashed_password = PasswordHandler.hash_password(register_request.password)
 
     # Determine tenant
-    tenant_id = request.tenant_id
+    tenant_id = register_request.tenant_id
     if not tenant_id:
         # Create new tenant
-        slug = request.email.split("@")[0].lower().replace(".", "-")
+        slug = register_request.email.split("@")[0].lower().replace(".", "-")
         tenant_id = await db.fetchval(
             """
             INSERT INTO tenants (name, slug, plan)
             VALUES ($1, $2, 'free')
             RETURNING id
             """,
-            f"{request.full_name}'s Organization",
+            f"{register_request.full_name}'s Organization",
             slug
         )
 
@@ -190,7 +194,7 @@ async def register(request: RegisterRequest):
         VALUES ($1, $2, $3, $4)
         RETURNING id
         """,
-        request.email, hashed_password, request.full_name, tenant_id
+        register_request.email, hashed_password, register_request.full_name, tenant_id
     )
 
     # Assign default "viewer" role
@@ -223,8 +227,8 @@ async def register(request: RegisterRequest):
 
     return UserResponse(
         id=user_id,
-        email=request.email,
-        full_name=request.full_name,
+        email=register_request.email,
+        full_name=register_request.full_name,
         tenant_id=tenant_id,
         tenant_name=tenant["name"],
         is_active=True,

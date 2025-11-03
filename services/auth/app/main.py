@@ -7,8 +7,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from app.settings import settings
 from app.database import db
+from app.limiter import limiter
 from app.routers import auth, api_keys
 
 
@@ -25,7 +28,6 @@ async def lifespan(app: FastAPI):
     # Cleanup
     await db.disconnect()
 
-
 # Create FastAPI app
 app = FastAPI(
     title="Agentic Company - Auth Service",
@@ -33,6 +35,12 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Add rate limiter to app state
+app.state.limiter = limiter
+
+# Add rate limit exception handler
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS middleware
 app.add_middleware(
@@ -55,8 +63,9 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Health check
+# Health check (no rate limit for monitoring)
 @app.get("/health")
+@limiter.exempt
 async def health_check():
     """Health check endpoint"""
     return {

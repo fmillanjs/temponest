@@ -2,21 +2,25 @@
 API Key management routes.
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Request
 from typing import List
 from uuid import UUID
+import json
 from app.models import APIKeyCreateRequest, APIKeyResponse, AuthContext
 from app.handlers import APIKeyHandler
 from app.middleware import get_current_active_user, require_permission
 from app.database import db
+from app.limiter import limiter
 
 
 router = APIRouter(prefix="/api-keys", tags=["API Keys"])
 
 
 @router.post("", response_model=APIKeyResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/hour")  # Limit API key creation
 async def create_api_key(
-    request: APIKeyCreateRequest,
+    request: Request,
+    api_key_request: APIKeyCreateRequest,
     current_user: AuthContext = Depends(get_current_active_user)
 ):
     """
@@ -25,11 +29,11 @@ async def create_api_key(
     """
     # Create API key
     api_key_id, full_key = await APIKeyHandler.create_api_key(
-        name=request.name,
+        name=api_key_request.name,
         tenant_id=UUID(current_user.tenant_id),
         user_id=None if current_user.user_id == "api-key" else UUID(current_user.user_id),
-        scopes=request.scopes,
-        expires_in_days=request.expires_in_days
+        scopes=api_key_request.scopes,
+        expires_in_days=api_key_request.expires_in_days
     )
 
     # Get created key info
@@ -46,12 +50,12 @@ async def create_api_key(
     await db.execute(
         """
         INSERT INTO audit_log (tenant_id, user_id, action, resource_type, resource_id, details)
-        VALUES ($1, $2, 'api_key_create', 'api_key', $3, $4)
+        VALUES ($1, $2, 'api_key_create', 'api_key', $3, $4::jsonb)
         """,
         current_user.tenant_id,
         current_user.user_id,
         str(api_key_id),
-        {"name": request.name, "scopes": request.scopes}
+        json.dumps({"name": api_key_request.name, "scopes": api_key_request.scopes})
     )
 
     return APIKeyResponse(
@@ -68,7 +72,9 @@ async def create_api_key(
 
 
 @router.get("", response_model=List[APIKeyResponse])
+@limiter.limit("100/hour")  # Higher limit for read operations
 async def list_api_keys(
+    request: Request,
     current_user: AuthContext = Depends(get_current_active_user)
 ):
     """
@@ -93,7 +99,9 @@ async def list_api_keys(
 
 
 @router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("20/hour")  # Moderate limit for deletions
 async def revoke_api_key(
+    request: Request,
     key_id: UUID,
     current_user: AuthContext = Depends(get_current_active_user)
 ):
