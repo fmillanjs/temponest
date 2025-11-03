@@ -7,9 +7,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from settings import settings
-from database import db
-from routers import auth, api_keys
+from app.settings import settings
+from app.database import db
+from app.routers import auth, api_keys
 
 
 @asynccontextmanager

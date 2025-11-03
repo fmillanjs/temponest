@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from uuid import UUID
-from settings import settings
+from app.settings import settings
 
 
 class JWTHandler:

@@ -3,7 +3,7 @@ Password hashing and verification using bcrypt.
 """
 
 from passlib.context import CryptContext
-from settings import settings
+from app.settings import settings
 
 
 # Create bcrypt context

@@ -6,9 +6,9 @@ Can be used in auth service and other services.
 from fastapi import Request, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
-from models import AuthContext
-from handlers import JWTHandler, APIKeyHandler
-from database import db
+from app.models import AuthContext
+from app.handlers import JWTHandler, APIKeyHandler
+from app.database import db
 
 
 security = HTTPBearer(auto_error=False)

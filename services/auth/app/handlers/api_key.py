@@ -7,8 +7,8 @@ import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 from uuid import UUID
-from settings import settings
-from database import db
+from app.settings import settings
+from app.database import db
 
 
 class APIKeyHandler:

@@ -4,10 +4,10 @@ Authentication routes (login, register, refresh token).
 
 from fastapi import APIRouter, HTTPException, status, Depends
 from datetime import datetime
-from models import LoginRequest, TokenResponse, RefreshTokenRequest, RegisterRequest, UserResponse
-from handlers import JWTHandler, PasswordHandler
-from database import db
-from middleware import get_user_roles, get_user_permissions
+from app.models import LoginRequest, TokenResponse, RefreshTokenRequest, RegisterRequest, UserResponse
+from app.handlers import JWTHandler, PasswordHandler
+from app.database import db
+from app.middleware import get_user_roles, get_user_permissions
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -85,7 +85,7 @@ async def login(request: LoginRequest):
         user["tenant_id"], user["id"]
     )
 
-    from settings import settings
+    from app.settings import settings
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -139,7 +139,7 @@ async def refresh_token(request: RefreshTokenRequest):
         is_superuser=user["is_superuser"]
     )
 
-    from settings import settings
+    from app.settings import settings
     return TokenResponse(
         access_token=access_token,
         refresh_token=request.refresh_token,  # Keep same refresh token

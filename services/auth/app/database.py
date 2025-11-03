@@ -5,7 +5,7 @@ Database connection and utilities.
 import asyncpg
 from contextlib import asynccontextmanager
 from typing import Optional
-from settings import settings
+from app.settings import settings
 
 
 class Database:

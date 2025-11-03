@@ -5,10 +5,10 @@ API Key management routes.
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
 from uuid import UUID
-from models import APIKeyCreateRequest, APIKeyResponse, AuthContext
-from handlers import APIKeyHandler
-from middleware import get_current_active_user, require_permission
-from database import db
+from app.models import APIKeyCreateRequest, APIKeyResponse, AuthContext
+from app.handlers import APIKeyHandler
+from app.middleware import get_current_active_user, require_permission
+from app.database import db
 
 
 router = APIRouter(prefix="/api-keys", tags=["API Keys"])
