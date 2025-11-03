@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional, List
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import tiktoken
@@ -19,6 +19,13 @@ from memory.rag import RAGMemory
 from memory.langfuse_tracer import LangfuseTracer
 from departments.manager import DepartmentManager
 from routers import departments as departments_router
+from auth_client import AuthClient, AuthContext
+from auth_middleware import (
+    set_auth_client,
+    get_current_user,
+    require_permission,
+    require_any_permission
+)
 
 
 # Request/Response Models
@@ -65,6 +72,14 @@ async def lifespan(app: FastAPI):
 
     # Startup
     print("🚀 Starting Agent Service...")
+
+    # Initialize auth client
+    auth_client = AuthClient(
+        auth_service_url=settings.AUTH_SERVICE_URL,
+        jwt_secret=settings.JWT_SECRET_KEY
+    )
+    set_auth_client(auth_client)
+    print(f"   Auth client configured: {settings.AUTH_SERVICE_URL}")
 
     # Initialize RAG memory
     rag_memory = RAGMemory(
@@ -117,6 +132,8 @@ async def lifespan(app: FastAPI):
     print("🛑 Shutting down Agent Service...")
     if langfuse_tracer:
         langfuse_tracer.flush()
+    if auth_client:
+        await auth_client.close()
 
 
 app = FastAPI(
@@ -196,7 +213,10 @@ async def health_check():
 
 
 @app.post("/overseer/run", response_model=AgentResponse)
-async def run_overseer(request: AgentRequest):
+async def run_overseer(
+    request: AgentRequest,
+    current_user: AuthContext = Depends(require_permission("agents:execute"))
+):
     """
     Run the Overseer agent to coordinate and decompose goals.
 
@@ -205,6 +225,8 @@ async def run_overseer(request: AgentRequest):
     - Validates tasks against RAG knowledge base (≥2 citations required)
     - Routes tasks to appropriate agents (Developer, etc.)
     - Enforces budget and latency guardrails
+
+    Requires: agents:execute permission
     """
     if not overseer_agent:
         raise HTTPException(status_code=503, detail="Overseer agent not initialized")
@@ -280,7 +302,10 @@ async def run_overseer(request: AgentRequest):
 
 
 @app.post("/developer/run", response_model=AgentResponse)
-async def run_developer(request: AgentRequest):
+async def run_developer(
+    request: AgentRequest,
+    current_user: AuthContext = Depends(require_permission("agents:execute"))
+):
     """
     Run the Developer agent to generate code (CRUD APIs, schemas, frontend components).
 
@@ -289,6 +314,8 @@ async def run_developer(request: AgentRequest):
     - Follows best practices from RAG knowledge base
     - Creates migrations, API endpoints, and UI components
     - Validates generated code syntax and structure
+
+    Requires: agents:execute permission
     """
     if not developer_agent:
         raise HTTPException(status_code=503, detail="Developer agent not initialized")
@@ -364,12 +391,19 @@ async def run_developer(request: AgentRequest):
 
 
 @app.get("/metrics")
-async def get_metrics():
-    """Get operational metrics"""
+async def get_metrics(
+    current_user: AuthContext = Depends(require_permission("agents:read"))
+):
+    """
+    Get operational metrics.
+
+    Requires: agents:read permission
+    """
     return {
         "idempotency_cache_size": len(idempotency_cache),
         "rag_collection_size": await rag_memory.get_collection_size() if rag_memory else 0,
-        "langfuse_traces": langfuse_tracer.get_trace_count() if langfuse_tracer else 0
+        "langfuse_traces": langfuse_tracer.get_trace_count() if langfuse_tracer else 0,
+        "tenant_id": current_user.tenant_id
     }
 
 

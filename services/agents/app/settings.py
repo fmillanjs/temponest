@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: Optional[str] = None
     LANGFUSE_HOST: str = "http://langfuse:3000"
 
+    # Auth Service
+    AUTH_SERVICE_URL: str = "http://auth:9002"
+    JWT_SECRET_KEY: str = "your-secret-key-change-in-production-min-32-chars-long"  # Must match auth service
+
     # Model Provider Selection
     # overseer: which provider for Overseer agent (ollama, claude, openai)
     # developer: which provider for Developer agent (ollama, claude, openai)

@@ -8,9 +8,17 @@ Endpoints to:
 - Add/edit department configurations
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
+import sys
+import os
+
+# Add parent directory to path to import auth modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from auth_client import AuthContext
+from auth_middleware import require_permission, require_any_permission
 
 router = APIRouter(prefix="/departments", tags=["departments"])
 
@@ -38,8 +46,14 @@ class AgentTaskRequest(BaseModel):
 
 
 @router.get("/")
-async def list_departments():
-    """List all departments"""
+async def list_departments(
+    current_user: AuthContext = Depends(require_permission("departments:read"))
+):
+    """
+    List all departments.
+
+    Requires: departments:read permission
+    """
     if not _department_manager:
         raise HTTPException(status_code=503, detail="Department manager not initialized")
 
@@ -64,8 +78,15 @@ async def list_departments():
 
 
 @router.get("/{department_id}")
-async def get_department(department_id: str):
-    """Get department details"""
+async def get_department(
+    department_id: str,
+    current_user: AuthContext = Depends(require_permission("departments:read"))
+):
+    """
+    Get department details.
+
+    Requires: departments:read permission
+    """
     if not _department_manager:
         raise HTTPException(status_code=503, detail="Department manager not initialized")
 
@@ -106,8 +127,15 @@ async def get_department(department_id: str):
 
 
 @router.get("/{department_id}/agents")
-async def list_department_agents(department_id: str):
-    """List all agents in a department"""
+async def list_department_agents(
+    department_id: str,
+    current_user: AuthContext = Depends(require_permission("departments:read"))
+):
+    """
+    List all agents in a department.
+
+    Requires: departments:read permission
+    """
     if not _department_manager:
         raise HTTPException(status_code=503, detail="Department manager not initialized")
 
@@ -121,8 +149,14 @@ async def list_department_agents(department_id: str):
 
 
 @router.get("/workflows/all")
-async def list_all_workflows():
-    """List all workflows across all departments"""
+async def list_all_workflows(
+    current_user: AuthContext = Depends(require_permission("workflows:read"))
+):
+    """
+    List all workflows across all departments.
+
+    Requires: workflows:read permission
+    """
     if not _department_manager:
         raise HTTPException(status_code=503, detail="Department manager not initialized")
 
@@ -145,8 +179,15 @@ async def list_all_workflows():
 
 
 @router.post("/workflows/execute")
-async def execute_workflow(request: WorkflowExecutionRequest):
-    """Execute a department workflow"""
+async def execute_workflow(
+    request: WorkflowExecutionRequest,
+    current_user: AuthContext = Depends(require_permission("workflows:create"))
+):
+    """
+    Execute a department workflow.
+
+    Requires: workflows:create permission
+    """
     if not _department_manager:
         raise HTTPException(status_code=503, detail="Department manager not initialized")
 
@@ -165,8 +206,15 @@ async def execute_workflow(request: WorkflowExecutionRequest):
 
 
 @router.post("/agents/execute")
-async def execute_agent_task(request: AgentTaskRequest):
-    """Execute a task with a specific agent"""
+async def execute_agent_task(
+    request: AgentTaskRequest,
+    current_user: AuthContext = Depends(require_permission("agents:execute"))
+):
+    """
+    Execute a task with a specific agent.
+
+    Requires: agents:execute permission
+    """
     if not _department_manager:
         raise HTTPException(status_code=503, detail="Department manager not initialized")
 
@@ -191,8 +239,14 @@ async def execute_agent_task(request: AgentTaskRequest):
 
 
 @router.get("/structure")
-async def get_org_structure():
-    """Get full organizational structure (hierarchical)"""
+async def get_org_structure(
+    current_user: AuthContext = Depends(require_permission("departments:read"))
+):
+    """
+    Get full organizational structure (hierarchical).
+
+    Requires: departments:read permission
+    """
     if not _department_manager:
         raise HTTPException(status_code=503, detail="Department manager not initialized")
 
