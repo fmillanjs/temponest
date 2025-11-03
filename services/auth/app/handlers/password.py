@@ -2,16 +2,7 @@
 Password hashing and verification using bcrypt.
 """
 
-from passlib.context import CryptContext
-from app.settings import settings
-
-
-# Create bcrypt context
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-    bcrypt__rounds=settings.BCRYPT_ROUNDS
-)
+import bcrypt
 
 
 class PasswordHandler:
@@ -20,14 +11,32 @@ class PasswordHandler:
     @staticmethod
     def hash_password(password: str) -> str:
         """Hash a plain text password"""
-        return pwd_context.hash(password)
+        # Encode password to bytes
+        password_bytes = password.encode('utf-8')
+
+        # Generate salt and hash
+        salt = bcrypt.gensalt(rounds=12)
+        hashed = bcrypt.hashpw(password_bytes, salt)
+
+        # Return as string
+        return hashed.decode('utf-8')
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash"""
-        return pwd_context.verify(plain_password, hashed_password)
+        try:
+            # Encode both password and hash to bytes
+            password_bytes = plain_password.encode('utf-8')
+            hash_bytes = hashed_password.encode('utf-8')
+
+            # Verify
+            return bcrypt.checkpw(password_bytes, hash_bytes)
+        except Exception as e:
+            print(f"Password verification error: {e}")
+            return False
 
     @staticmethod
     def needs_rehash(hashed_password: str) -> bool:
-        """Check if password hash needs to be updated"""
-        return pwd_context.needs_update(hashed_password)
+        """Check if password hash needs to be updated (always False for now)"""
+        # bcrypt hashes don't need rehashing in our current setup
+        return False

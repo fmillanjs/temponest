@@ -27,7 +27,7 @@ async def create_api_key(
     api_key_id, full_key = await APIKeyHandler.create_api_key(
         name=request.name,
         tenant_id=UUID(current_user.tenant_id),
-        user_id=UUID(current_user.user_id) if current_user.user_id != "api-key" else None,
+        user_id=None if current_user.user_id == "api-key" else UUID(current_user.user_id),
         scopes=request.scopes,
         expires_in_days=request.expires_in_days
     )

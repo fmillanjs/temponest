@@ -156,8 +156,8 @@ class RoleResponse(BaseModel):
 
 class AuthContext(BaseModel):
     """Authentication context passed to other services"""
-    user_id: UUID
-    tenant_id: UUID
+    user_id: str  # Can be UUID string or "api-key"
+    tenant_id: str  # UUID string
     email: str
     roles: List[str]
     permissions: List[str]
