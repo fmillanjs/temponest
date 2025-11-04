@@ -444,3 +444,29 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  # Web UI - Admin Dashboard with Workflow Visualization
+  web-ui:
+    build:
+      context: ..
+      dockerfile: web-ui/Dockerfile
+    container_name: agentic-web-ui
+    depends_on:
+      - agents
+      - scheduler
+    ports:
+      - "8082:8080"
+    environment:
+      - TEMPONEST_BASE_URL=http://agents:9000
+      - TEMPONEST_AUTH_TOKEN=${AUTH_TOKEN:-}
+    volumes:
+      - ../web-ui:/app
+      - ../config:/config
+    networks:
+      - agentic-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
