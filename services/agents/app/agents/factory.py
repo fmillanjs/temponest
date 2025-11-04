@@ -14,6 +14,7 @@ from .developer_v2 import DeveloperAgentV2
 from .qa_tester import QATesterAgent
 from .devops import DevOpsAgent
 from .designer import DesignerAgent
+from .security_auditor import SecurityAuditorAgent
 
 
 class AgentFactory:
@@ -129,5 +130,26 @@ class AgentFactory:
             temperature=0.3,  # Slightly higher for creative design work
             top_p=settings.MODEL_TOP_P,
             max_tokens=settings.MODEL_MAX_TOKENS * 2,  # Design needs more tokens
+            seed=settings.MODEL_SEED
+        )
+
+    @staticmethod
+    def create_security_auditor(
+        rag_memory: RAGMemory,
+        tracer: LangfuseTracer
+    ):
+        """Create Security Auditor agent based on configuration"""
+        # Security Auditor uses code model (same as Developer)
+        provider = settings.DEVELOPER_PROVIDER
+        model = settings.get_model_for_agent("developer")
+
+        # Use CrewAI approach
+        return SecurityAuditorAgent(
+            rag_memory=rag_memory,
+            tracer=tracer,
+            code_model=model,
+            temperature=0.1,  # Very low for precise security analysis
+            top_p=settings.MODEL_TOP_P,
+            max_tokens=settings.MODEL_MAX_TOKENS * 2,  # Security reports need more tokens
             seed=settings.MODEL_SEED
         )

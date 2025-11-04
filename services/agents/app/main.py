@@ -64,6 +64,7 @@ developer_agent: Optional[Any] = None  # Can be DeveloperAgent or DeveloperAgent
 qa_tester_agent: Optional[Any] = None  # QA Tester Agent
 devops_agent: Optional[Any] = None  # DevOps Agent
 designer_agent: Optional[Any] = None  # Designer/UX Agent
+security_auditor_agent: Optional[Any] = None  # Security Auditor Agent
 department_manager: Optional[DepartmentManager] = None
 idempotency_cache: Dict[str, AgentResponse] = {}
 
@@ -71,7 +72,7 @@ idempotency_cache: Dict[str, AgentResponse] = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic"""
-    global rag_memory, langfuse_tracer, overseer_agent, developer_agent, qa_tester_agent, devops_agent, designer_agent, department_manager
+    global rag_memory, langfuse_tracer, overseer_agent, developer_agent, qa_tester_agent, devops_agent, designer_agent, security_auditor_agent, department_manager
 
     # Startup
     print("🚀 Starting Agent Service...")
@@ -130,6 +131,12 @@ async def lifespan(app: FastAPI):
         tracer=langfuse_tracer
     )
     print(f"   Designer/UX initialized")
+
+    security_auditor_agent = AgentFactory.create_security_auditor(
+        rag_memory=rag_memory,
+        tracer=langfuse_tracer
+    )
+    print(f"   Security Auditor initialized")
 
     # Initialize Department Manager (new organizational structure)
     print("\n🏢 Loading Organizational Structure...")
@@ -221,6 +228,7 @@ async def health_check():
         "qa_tester": "ready" if qa_tester_agent else "not_initialized",
         "devops": "ready" if devops_agent else "not_initialized",
         "designer": "ready" if designer_agent else "not_initialized",
+        "security_auditor": "ready" if security_auditor_agent else "not_initialized",
     }
 
     return HealthResponse(
@@ -667,6 +675,99 @@ async def run_designer(
                 "max_tokens": settings.MODEL_MAX_TOKENS * 2,
                 "seed": settings.MODEL_SEED,
                 "agent": "designer"
+            }
+        )
+
+        # Cache for idempotency
+        if request.idempotency_key:
+            idempotency_cache[request.idempotency_key] = response
+
+        return response
+
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+        return AgentResponse(
+            task_id=task_id,
+            status="failed",
+            citations=[],
+            tokens_used=0,
+            latency_ms=latency_ms,
+            model_info={"model": settings.CODE_MODEL},
+            error=str(e)
+        )
+
+
+@app.post("/security-auditor/run", response_model=AgentResponse)
+async def run_security_auditor(
+    request: AgentRequest,
+    current_user: AuthContext = Depends(require_permission("agents:execute"))
+):
+    """
+    Run the Security Auditor agent to scan for vulnerabilities.
+
+    The Security Auditor Agent:
+    - Scans code for OWASP Top 10:2021 vulnerabilities
+    - Checks for common security issues (SQL injection, XSS, CSRF, etc.)
+    - Validates authentication and authorization patterns
+    - Scans dependencies for known CVEs
+    - Detects hardcoded secrets and credentials
+    - Validates security headers and configurations
+    - Generates security reports with severity ratings (Critical/High/Medium/Low)
+
+    Requires: agents:execute permission
+    """
+    if not security_auditor_agent:
+        raise HTTPException(status_code=503, detail="Security Auditor agent not initialized")
+
+    # Check idempotency
+    if request.idempotency_key and request.idempotency_key in idempotency_cache:
+        return idempotency_cache[request.idempotency_key]
+
+    # Enforce budget (Security audit needs more tokens)
+    if not enforce_budget(request.task, budget=settings.BUDGET_TOKENS_PER_TASK * 2):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Task exceeds token budget of {settings.BUDGET_TOKENS_PER_TASK * 2}"
+        )
+
+    task_id = str(uuid4())
+    start_time = time.time()
+
+    try:
+        # Run agent
+        result = await security_auditor_agent.execute(
+            task=request.task,
+            context=request.context or {},
+            task_id=task_id
+        )
+
+        # Validate citations
+        citations = result.get("citations", [])
+        if not validate_citations(citations):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient grounding: found {len(citations)} citations, need ≥2 with score ≥{settings.RAG_MIN_SCORE}"
+            )
+
+        # Check latency SLO (relaxed for security analysis)
+        latency_ms = int((time.time() - start_time) * 1000)
+        if latency_ms > settings.LATENCY_SLO_MS * 2:
+            print(f"⚠️  SLO violated: {latency_ms}ms > {settings.LATENCY_SLO_MS * 2}ms")
+
+        response = AgentResponse(
+            task_id=task_id,
+            status="completed",
+            result=result,
+            citations=citations,
+            tokens_used=count_tokens(str(result)),
+            latency_ms=latency_ms,
+            model_info={
+                "model": settings.CODE_MODEL,
+                "temperature": 0.1,  # Very low for precise security analysis
+                "top_p": settings.MODEL_TOP_P,
+                "max_tokens": settings.MODEL_MAX_TOKENS * 2,
+                "seed": settings.MODEL_SEED,
+                "agent": "security_auditor"
             }
         )
 
