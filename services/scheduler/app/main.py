@@ -138,6 +138,11 @@ async def health_check():
     # Overall status
     status = "healthy" if (db_connected and scheduler_running and agent_service_available) else "unhealthy"
 
+    # Update Prometheus metrics
+    MetricsRecorder.update_scheduler_health(scheduler_running)
+    MetricsRecorder.update_active_jobs(active_jobs)
+    MetricsRecorder.update_agent_service_health(agent_service_available)
+
     return SchedulerHealthResponse(
         status=status,
         scheduler_running=scheduler_running,

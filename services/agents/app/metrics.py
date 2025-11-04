@@ -94,6 +94,12 @@ service_health = Gauge(
     ['component']  # component: database, qdrant, langfuse, ollama
 )
 
+# Gauge for overall agent service health
+agent_service_health = Gauge(
+    'agent_service_health',
+    'Overall agent service health (1=healthy, 0=unhealthy)'
+)
+
 # Info metric for service version
 service_info = Info(
     'service',

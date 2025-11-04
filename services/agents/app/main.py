@@ -4,6 +4,7 @@ FastAPI application that exposes CrewAI agents (Overseer, Developer) with RAG an
 """
 
 import time
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional, List
 from uuid import uuid4, UUID
@@ -89,6 +90,45 @@ event_dispatcher: Optional[EventDispatcher] = None
 
 # Collaboration system
 collaboration_manager: Optional[Any] = None
+
+# Background task flag
+_metrics_task: Optional[asyncio.Task] = None
+
+
+async def update_metrics_periodically():
+    """Background task to update health metrics every 15 seconds"""
+    while True:
+        try:
+            # Update service health metrics
+            from metrics import MetricsRecorder, agent_service_health, db_pool_size
+
+            if rag_memory:
+                MetricsRecorder.update_service_health("qdrant", rag_memory.is_healthy())
+            if langfuse_tracer:
+                MetricsRecorder.update_service_health("langfuse", langfuse_tracer.is_healthy())
+            if db_pool:
+                MetricsRecorder.update_service_health("database", True)
+
+                # Update pool metrics
+                pool_size = db_pool.get_size()
+                pool_free = db_pool.get_idle_size()
+                pool_in_use = pool_size - pool_free
+                db_pool_size.labels(pool_type="size").set(pool_size)
+                db_pool_size.labels(pool_type="available").set(pool_free)
+                db_pool_size.labels(pool_type="in_use").set(pool_in_use)
+
+            # Update overall health
+            all_healthy = (
+                (rag_memory and rag_memory.is_healthy()) and
+                (langfuse_tracer and langfuse_tracer.is_healthy()) and
+                (db_pool is not None)
+            )
+            agent_service_health.set(1.0 if all_healthy else 0.0)
+
+        except Exception as e:
+            print(f"Error updating metrics: {e}")
+
+        await asyncio.sleep(15)  # Update every 15 seconds
 
 
 @asynccontextmanager
@@ -248,12 +288,28 @@ async def lifespan(app: FastAPI):
     collaboration_manager = CollaborationManager(agents_dict=agents_dict)
     print("   ✅ Collaboration manager initialized with 6 agents")
 
+    # Start background metrics task
+    print("\n📊 Starting metrics background task...")
+    global _metrics_task
+    _metrics_task = asyncio.create_task(update_metrics_periodically())
+    print("   ✅ Metrics task started")
+
     print("✅ Agent Service ready!")
 
     yield
 
     # Shutdown
     print("🛑 Shutting down Agent Service...")
+
+    # Cancel metrics task
+    if _metrics_task:
+        _metrics_task.cancel()
+        try:
+            await _metrics_task
+        except asyncio.CancelledError:
+            pass
+        print("   Metrics task stopped")
+
     if langfuse_tracer:
         langfuse_tracer.flush()
     if auth_client:
@@ -387,9 +443,15 @@ async def record_execution_cost(
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint"""
+    # Check service health
+    qdrant_healthy = rag_memory and rag_memory.is_healthy()
+    langfuse_healthy = langfuse_tracer and langfuse_tracer.is_healthy()
+    database_healthy = db_pool is not None
+
     services = {
-        "qdrant": "healthy" if rag_memory and rag_memory.is_healthy() else "unhealthy",
-        "langfuse": "healthy" if langfuse_tracer and langfuse_tracer.is_healthy() else "unhealthy",
+        "qdrant": "healthy" if qdrant_healthy else "unhealthy",
+        "langfuse": "healthy" if langfuse_healthy else "unhealthy",
+        "database": "healthy" if database_healthy else "unhealthy",
         "overseer": "ready" if overseer_agent else "not_initialized",
         "developer": "ready" if developer_agent else "not_initialized",
         "qa_tester": "ready" if qa_tester_agent else "not_initialized",
@@ -397,6 +459,25 @@ async def health_check():
         "designer": "ready" if designer_agent else "not_initialized",
         "security_auditor": "ready" if security_auditor_agent else "not_initialized",
     }
+
+    # Update Prometheus metrics
+    from metrics import MetricsRecorder, db_pool_size
+    MetricsRecorder.update_service_health("qdrant", qdrant_healthy)
+    MetricsRecorder.update_service_health("langfuse", langfuse_healthy)
+    MetricsRecorder.update_service_health("database", database_healthy)
+
+    # Set agent service health (1 if overall healthy)
+    from metrics import agent_service_health
+    agent_service_health.set(1.0 if all(v in ["healthy", "ready"] for v in services.values()) else 0.0)
+
+    # Update database pool metrics
+    if db_pool:
+        pool_size = db_pool.get_size()
+        pool_free = db_pool.get_idle_size()
+        pool_in_use = pool_size - pool_free
+        db_pool_size.labels(pool_type="size").set(pool_size)
+        db_pool_size.labels(pool_type="available").set(pool_free)
+        db_pool_size.labels(pool_type="in_use").set(pool_in_use)
 
     return HealthResponse(
         status="healthy" if all(v in ["healthy", "ready"] for v in services.values()) else "degraded",
