@@ -13,6 +13,7 @@ volumes:
   redis-data:
   prometheus-data:
   alertmanager-data:
+  grafana-data:
 
 services:
   # PostgreSQL - shared by Temporal and Langfuse
@@ -414,3 +415,32 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # Grafana - Metrics Visualization and Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: agentic-grafana
+    depends_on:
+      - agentic-prometheus
+    ports:
+      - "3003:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SERVER_ROOT_URL=http://localhost:3003
+      - GF_INSTALL_PLUGINS=
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/system-health.json
+    volumes:
+      - ../infra/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ../infra/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ../infra/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana-data:/var/lib/grafana
+    networks:
+      - agentic-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
