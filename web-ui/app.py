@@ -4,6 +4,8 @@ Temponest Admin Dashboard - Simple Web UI
 from flask import Flask, render_template, jsonify, request
 from temponest_sdk import TemponestClient
 import os
+import yaml
+from pathlib import Path
 
 app = Flask(__name__)
 
@@ -38,6 +40,12 @@ def schedules_page():
 def costs_page():
     """Costs tracking page"""
     return render_template("costs.html")
+
+
+@app.route("/visualization")
+def visualization_page():
+    """Workflow visualization page"""
+    return render_template("visualization.html")
 
 
 # API Endpoints
@@ -183,6 +191,129 @@ def api_status():
         return jsonify(status)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# Visualization API Endpoints
+@app.route("/api/visualization/departments", methods=["GET"])
+def api_get_departments():
+    """Get department hierarchy and structure"""
+    try:
+        # Get path to department configs
+        config_path = Path(__file__).parent.parent / "config" / "departments"
+
+        departments = []
+        department_files = list(config_path.glob("*.yaml"))
+
+        for dept_file in department_files:
+            with open(dept_file, 'r') as f:
+                dept_config = yaml.safe_load(f)
+                if dept_config and 'department' in dept_config:
+                    departments.append(dept_config['department'])
+
+        # Build hierarchy
+        hierarchy = build_department_hierarchy(departments)
+
+        return jsonify(hierarchy)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/visualization/workflows", methods=["GET"])
+def api_get_workflows():
+    """Get all workflows across departments"""
+    try:
+        config_path = Path(__file__).parent.parent / "config" / "departments"
+
+        all_workflows = []
+        department_files = list(config_path.glob("*.yaml"))
+
+        for dept_file in department_files:
+            with open(dept_file, 'r') as f:
+                dept_config = yaml.safe_load(f)
+                if dept_config and 'department' in dept_config:
+                    dept = dept_config['department']
+                    if 'workflows' in dept:
+                        for workflow in dept['workflows']:
+                            workflow['department_id'] = dept['id']
+                            workflow['department_name'] = dept['name']
+                            all_workflows.append(workflow)
+
+        return jsonify(all_workflows)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/visualization/agents-hierarchy", methods=["GET"])
+def api_get_agents_hierarchy():
+    """Get agents organized by department"""
+    try:
+        config_path = Path(__file__).parent.parent / "config" / "departments"
+
+        agents_by_dept = {}
+        department_files = list(config_path.glob("*.yaml"))
+
+        for dept_file in department_files:
+            with open(dept_file, 'r') as f:
+                dept_config = yaml.safe_load(f)
+                if dept_config and 'department' in dept_config:
+                    dept = dept_config['department']
+                    dept_id = dept['id']
+                    agents_by_dept[dept_id] = {
+                        'department_name': dept['name'],
+                        'department_id': dept_id,
+                        'parent': dept.get('parent'),
+                        'agents': dept.get('agents', [])
+                    }
+
+        return jsonify(agents_by_dept)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/visualization/workflow/<workflow_id>", methods=["GET"])
+def api_get_workflow_detail(workflow_id):
+    """Get detailed workflow with agent connections"""
+    try:
+        config_path = Path(__file__).parent.parent / "config" / "departments"
+
+        department_files = list(config_path.glob("*.yaml"))
+
+        for dept_file in department_files:
+            with open(dept_file, 'r') as f:
+                dept_config = yaml.safe_load(f)
+                if dept_config and 'department' in dept_config:
+                    dept = dept_config['department']
+                    if 'workflows' in dept:
+                        for workflow in dept['workflows']:
+                            if workflow['id'] == workflow_id:
+                                workflow['department_id'] = dept['id']
+                                workflow['department_name'] = dept['name']
+                                return jsonify(workflow)
+
+        return jsonify({"error": "Workflow not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def build_department_hierarchy(departments):
+    """Build hierarchical structure from flat department list"""
+    # Create a map of departments by ID
+    dept_map = {dept['id']: dept for dept in departments}
+
+    # Find root departments (those with no parent)
+    roots = []
+    for dept in departments:
+        dept['children'] = []
+        if dept.get('parent') is None:
+            roots.append(dept)
+
+    # Build tree structure
+    for dept in departments:
+        parent_id = dept.get('parent')
+        if parent_id and parent_id in dept_map:
+            dept_map[parent_id]['children'].append(dept)
+
+    return roots
 
 
 if __name__ == "__main__":

@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temponest - Agentic Company Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: #1e293b;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #60a5fa;
+            font-size: 1.75rem;
+            margin-bottom: 10px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .tab {
+            background: #334155;
+            color: #e2e8f0;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            background: #475569;
+        }
+
+        .tab.active {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        .view {
+            display: none;
+            height: 100%;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        #hierarchy-view, #workflow-view, #agents-view {
+            background: #1e293b;
+            border-radius: 10px;
+            padding: 20px;
+            height: calc(100% - 40px);
+            overflow: auto;
+        }
+
+        .node circle {
+            fill: #3b82f6;
+            stroke: #60a5fa;
+            stroke-width: 2px;
+            cursor: pointer;
+        }
+
+        .node circle:hover {
+            fill: #2563eb;
+        }
+
+        .node text {
+            font-size: 14px;
+            fill: #e2e8f0;
+        }
+
+        .link {
+            fill: none;
+            stroke: #475569;
+            stroke-width: 2px;
+        }
+
+        .workflow-card {
+            background: #334155;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .workflow-card h3 {
+            color: #60a5fa;
+            margin-bottom: 10px;
+        }
+
+        .workflow-step {
+            background: #1e293b;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 3px solid #10b981;
+            position: relative;
+        }
+
+        .workflow-step.needs-approval {
+            border-left-color: #f59e0b;
+        }
+
+        .workflow-step::before {
+            content: '';
+            position: absolute;
+            left: -10px;
+            top: 50%;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #10b981;
+        }
+
+        .workflow-step.needs-approval::before {
+            background: #f59e0b;
+        }
+
+        .agent-name {
+            font-weight: bold;
+            color: #60a5fa;
+        }
+
+        .approval-badge {
+            display: inline-block;
+            background: #f59e0b;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-left: 10px;
+        }
+
+        .risk-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .risk-low { background: #10b981; color: white; }
+        .risk-medium { background: #f59e0b; color: white; }
+        .risk-high { background: #ef4444; color: white; }
+
+        .agent-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .agent-card {
+            background: #334155;
+            border-radius: 8px;
+            padding: 20px;
+            border-top: 4px solid #3b82f6;
+        }
+
+        .agent-card h4 {
+            color: #60a5fa;
+            margin-bottom: 10px;
+        }
+
+        .agent-role {
+            color: #94a3b8;
+            font-style: italic;
+            margin-bottom: 10px;
+        }
+
+        .dept-label {
+            background: #1e293b;
+            color: #60a5fa;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: inline-block;
+            margin-top: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+            font-size: 18px;
+        }
+
+        .workflow-connections {
+            margin-left: 20px;
+            padding-left: 20px;
+            border-left: 2px solid #475569;
+        }
+
+        .back-btn {
+            background: #334155;
+            color: #e2e8f0;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 15px;
+        }
+
+        .back-btn:hover {
+            background: #475569;
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #334155;
+            border-radius: 8px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏢 Agentic Company Visualization</h1>
+            <p>Interactive view of your AI organization structure and workflows</p>
+            <div class="tabs">
+                <button class="tab active" onclick="switchView('hierarchy')">Department Hierarchy</button>
+                <button class="tab" onclick="switchView('workflow')">Workflows</button>
+                <button class="tab" onclick="switchView('agents')">Agents by Department</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <!-- Department Hierarchy View -->
+            <div id="hierarchy-view" class="view active">
+                <div class="loading">Loading department hierarchy...</div>
+            </div>
+
+            <!-- Workflows View -->
+            <div id="workflow-view" class="view">
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: #10b981;"></div>
+                        <span>Standard Step</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: #f59e0b;"></div>
+                        <span>Requires Approval</span>
+                    </div>
+                </div>
+                <div id="workflow-content" class="loading">Loading workflows...</div>
+            </div>
+
+            <!-- Agents View -->
+            <div id="agents-view" class="view">
+                <div id="agents-content" class="loading">Loading agents...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let currentView = 'hierarchy';
+        let departmentsData = null;
+        let workflowsData = null;
+        let agentsData = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAllData();
+        });
+
+        async function loadAllData() {
+            try {
+                // Load all data in parallel
+                const [depts, workflows, agents] = await Promise.all([
+                    fetch('/api/visualization/departments').then(r => r.json()),
+                    fetch('/api/visualization/workflows').then(r => r.json()),
+                    fetch('/api/visualization/agents-hierarchy').then(r => r.json())
+                ]);
+
+                departmentsData = depts;
+                workflowsData = workflows;
+                agentsData = agents;
+
+                // Render current view
+                renderHierarchy();
+                renderWorkflows();
+                renderAgents();
+            } catch (error) {
+                console.error('Failed to load data:', error);
+            }
+        }
+
+        function switchView(view) {
+            // Update tabs
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update views
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(`${view}-view`).classList.add('active');
+
+            currentView = view;
+        }
+
+        function renderHierarchy() {
+            if (!departmentsData) return;
+
+            const container = document.getElementById('hierarchy-view');
+            container.innerHTML = '';
+
+            // Set up dimensions
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // Create SVG
+            const svg = d3.select('#hierarchy-view')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+
+            const g = svg.append('g')
+                .attr('transform', 'translate(100,100)');
+
+            // Create tree layout
+            const tree = d3.tree()
+                .size([height - 200, width - 400]);
+
+            // Convert flat structure to d3 hierarchy
+            const root = d3.hierarchy({
+                name: 'Organization',
+                children: departmentsData
+            }, d => {
+                if (d.children && d.children.length > 0) {
+                    return d.children;
+                }
+                return null;
+            });
+
+            // Generate tree
+            tree(root);
+
+            // Add links
+            g.selectAll('.link')
+                .data(root.links())
+                .enter()
+                .append('path')
+                .attr('class', 'link')
+                .attr('d', d3.linkHorizontal()
+                    .x(d => d.y)
+                    .y(d => d.x));
+
+            // Add nodes
+            const node = g.selectAll('.node')
+                .data(root.descendants())
+                .enter()
+                .append('g')
+                .attr('class', 'node')
+                .attr('transform', d => `translate(${d.y},${d.x})`);
+
+            node.append('circle')
+                .attr('r', 8)
+                .on('click', (event, d) => {
+                    if (d.data.name) {
+                        showDepartmentDetails(d.data);
+                    }
+                });
+
+            node.append('text')
+                .attr('dy', '.31em')
+                .attr('x', d => d.children ? -12 : 12)
+                .style('text-anchor', d => d.children ? 'end' : 'start')
+                .text(d => d.data.name || 'Organization');
+        }
+
+        function showDepartmentDetails(dept) {
+            if (!dept.id) return;
+
+            alert(`Department: ${dept.name}\n\nDescription: ${dept.description || 'N/A'}\n\nAgents: ${dept.agents?.length || 0}\nWorkflows: ${dept.workflows?.length || 0}`);
+        }
+
+        function renderWorkflows() {
+            if (!workflowsData) return;
+
+            const container = document.getElementById('workflow-content');
+            container.innerHTML = '';
+
+            if (workflowsData.length === 0) {
+                container.innerHTML = '<p class="loading">No workflows found</p>';
+                return;
+            }
+
+            workflowsData.forEach(workflow => {
+                const card = document.createElement('div');
+                card.className = 'workflow-card';
+
+                const riskClass = `risk-${workflow.risk_level || 'low'}`;
+
+                card.innerHTML = `
+                    <h3>${workflow.name} <span class="risk-badge ${riskClass}">${(workflow.risk_level || 'low').toUpperCase()} RISK</span></h3>
+                    <p style="color: #94a3b8; margin-bottom: 10px;">${workflow.description}</p>
+                    <div class="dept-label">${workflow.department_name}</div>
+                    <div class="workflow-connections">
+                        ${workflow.steps.map((step, idx) => `
+                            <div class="workflow-step ${step.approval_required ? 'needs-approval' : ''}">
+                                <div><strong>Step ${idx + 1}:</strong> <span class="agent-name">${step.agent}</span>${step.approval_required ? '<span class="approval-badge">APPROVAL REQUIRED</span>' : ''}</div>
+                                <div style="color: #94a3b8; margin-top: 5px;">${step.task}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function renderAgents() {
+            if (!agentsData) return;
+
+            const container = document.getElementById('agents-content');
+            container.innerHTML = '';
+
+            const agentCount = Object.values(agentsData).reduce((sum, dept) => sum + (dept.agents?.length || 0), 0);
+
+            if (agentCount === 0) {
+                container.innerHTML = '<p class="loading">No agents found</p>';
+                return;
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'agent-grid';
+
+            Object.values(agentsData).forEach(dept => {
+                if (dept.agents && dept.agents.length > 0) {
+                    dept.agents.forEach(agent => {
+                        const card = document.createElement('div');
+                        card.className = 'agent-card';
+
+                        card.innerHTML = `
+                            <h4>${agent.name}</h4>
+                            <div class="agent-role">${agent.role}</div>
+                            <div style="color: #94a3b8; font-size: 13px; margin-bottom: 10px;">
+                                <strong>Provider:</strong> ${agent.provider}<br>
+                                <strong>Model:</strong> ${agent.model}
+                            </div>
+                            <div style="color: #cbd5e1; font-size: 13px;">
+                                <strong>Responsibilities:</strong>
+                                <ul style="margin-left: 20px; margin-top: 5px;">
+                                    ${agent.responsibilities.slice(0, 3).map(r => `<li>${r}</li>`).join('')}
+                                    ${agent.responsibilities.length > 3 ? `<li><em>+${agent.responsibilities.length - 3} more...</em></li>` : ''}
+                                </ul>
+                            </div>
+                            <div class="dept-label">${dept.department_name}</div>
+                        `;
+
+                        grid.appendChild(card);
+                    });
+                }
+            });
+
+            container.appendChild(grid);
+        }
+    </script>
+</body>
+</html>
