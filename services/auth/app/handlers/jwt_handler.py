@@ -96,6 +96,8 @@ class JWTHandler:
         try:
             return jwt.decode(
                 token,
+                settings.JWT_SECRET_KEY,
+                algorithms=[settings.JWT_ALGORITHM],
                 options={"verify_signature": False, "verify_exp": False}
             )
         except JWTError:
