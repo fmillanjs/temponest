@@ -311,6 +311,37 @@ services:
       timeout: 10s
       retries: 3
 
+  # Scheduler Service - Scheduled Task Execution
+  scheduler:
+    build:
+      context: ../services/scheduler
+      dockerfile: Dockerfile
+    container_name: agentic-scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      agents:
+        condition: service_healthy
+    ports:
+      - "9003:9003"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/agentic
+      - AGENT_SERVICE_URL=http://agents:9000
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-CHANGE-ME-IN-PRODUCTION-USE-LONG-RANDOM-STRING}
+      - SCHEDULER_POLL_INTERVAL_SECONDS=${SCHEDULER_POLL_INTERVAL_SECONDS:-30}
+      - SCHEDULER_MAX_INSTANCES=${SCHEDULER_MAX_INSTANCES:-10}
+      - SCHEDULER_TIMEZONE=${SCHEDULER_TIMEZONE:-UTC}
+    volumes:
+      - ../services/scheduler/app:/app
+    networks:
+      - agentic-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9003/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Ingestion Service - RAG Document Processing
   ingestion:
     build:
