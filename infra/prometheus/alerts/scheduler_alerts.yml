@@ -1,0 +1,93 @@
+# Alert rules for Scheduler Service
+
+groups:
+  - name: scheduler_service_alerts
+    interval: 30s
+    rules:
+      # Scheduler not running
+      - alert: SchedulerNotRunning
+        expr: scheduler_health == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: scheduler-service
+        annotations:
+          summary: "Scheduler is not running"
+          description: "The task scheduler has stopped"
+
+      # High task failure rate
+      - alert: HighTaskFailureRate
+        expr: rate(scheduled_task_executions_total{status="failed"}[10m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          service: scheduler-service
+        annotations:
+          summary: "High task failure rate"
+          description: "Task failure rate is {{ $value }} failures/sec for agent {{ $labels.agent_name }}"
+
+      # Task execution too slow
+      - alert: SlowTaskExecution
+        expr: histogram_quantile(0.95, rate(task_execution_duration_seconds_bucket[10m])) > 600
+        for: 15m
+        labels:
+          severity: warning
+          service: scheduler-service
+        annotations:
+          summary: "Task execution is slow"
+          description: "95th percentile task execution time is {{ $value }}s"
+
+      # Agent service unhealthy
+      - alert: AgentServiceUnhealthy
+        expr: agent_service_health == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: scheduler-service
+        annotations:
+          summary: "Agent service is unhealthy"
+          description: "Scheduler cannot reach agent service"
+
+      # Too many running executions (possible stuck tasks)
+      - alert: TooManyRunningExecutions
+        expr: running_executions > 50
+        for: 30m
+        labels:
+          severity: warning
+          service: scheduler-service
+        annotations:
+          summary: "Too many concurrent task executions"
+          description: "{{ $value }} tasks are currently running - possible stuck tasks"
+
+      # High retry rate
+      - alert: HighTaskRetryRate
+        expr: rate(task_retries_total[10m]) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          service: scheduler-service
+        annotations:
+          summary: "High task retry rate"
+          description: "Task retry rate is {{ $value }} retries/sec"
+
+      # Agent service call timeouts
+      - alert: AgentServiceTimeouts
+        expr: rate(agent_service_calls_total{status="timeout"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: scheduler-service
+        annotations:
+          summary: "Agent service calls timing out"
+          description: "Agent service timeout rate is {{ $value }} timeouts/sec"
+
+      # Database connection issues
+      - alert: DatabaseConnectionIssues
+        expr: rate(scheduler_errors_total{error_type="database"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: scheduler-service
+        annotations:
+          summary: "Database connection issues"
+          description: "Database error rate is {{ $value }} errors/sec"

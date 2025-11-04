@@ -88,6 +88,21 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Include routers
 app.include_router(schedules.router)
 
+# Prometheus metrics
+from prometheus_client import make_asgi_app
+from metrics import MetricsRecorder, service_info
+
+# Initialize service info
+service_info.info({
+    'version': '1.0.0',
+    'service': 'scheduler-service',
+    'environment': 'production'
+})
+
+# Mount prometheus metrics endpoint
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
+
 
 # Health check endpoint
 @app.get("/health", response_model=SchedulerHealthResponse)

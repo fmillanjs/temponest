@@ -1,0 +1,104 @@
+# Alert rules for Agent Service
+
+groups:
+  - name: agent_service_alerts
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighAgentErrorRate
+        expr: rate(agent_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: agent-service
+        annotations:
+          summary: "High error rate in agent service"
+          description: "Agent {{ $labels.agent_name }} has error rate of {{ $value }} errors/sec for tenant {{ $labels.tenant_id }}"
+
+      # Agent execution duration too high
+      - alert: SlowAgentExecution
+        expr: histogram_quantile(0.95, rate(agent_execution_duration_seconds_bucket[5m])) > 300
+        for: 10m
+        labels:
+          severity: warning
+          service: agent-service
+        annotations:
+          summary: "Agent execution is slow"
+          description: "95th percentile agent execution time is {{ $value }}s for {{ $labels.agent_name }}"
+
+      # High cost burn rate
+      - alert: HighCostBurnRate
+        expr: rate(agent_cost_usd_total[1h]) > 10
+        for: 30m
+        labels:
+          severity: warning
+          service: agent-service
+        annotations:
+          summary: "High cost burn rate detected"
+          description: "Cost burn rate is {{ $value }} USD/hour for tenant {{ $labels.tenant_id }}"
+
+      # Budget threshold warning
+      - alert: BudgetThresholdWarning
+        expr: budget_usage_ratio > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: agent-service
+        annotations:
+          summary: "Budget threshold warning"
+          description: "Budget usage is at {{ $value | humanizePercentage }} for tenant {{ $labels.tenant_id }} ({{ $labels.budget_type }})"
+
+      # Budget exceeded
+      - alert: BudgetExceeded
+        expr: budget_usage_ratio >= 1.0
+        for: 1m
+        labels:
+          severity: critical
+          service: agent-service
+        annotations:
+          summary: "Budget exceeded!"
+          description: "Budget exceeded for tenant {{ $labels.tenant_id }} ({{ $labels.budget_type }})"
+
+      # Service component unhealthy
+      - alert: ServiceComponentUnhealthy
+        expr: service_health == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: agent-service
+        annotations:
+          summary: "Service component is unhealthy"
+          description: "Component {{ $labels.component }} is unhealthy"
+
+      # Webhook delivery failures
+      - alert: HighWebhookFailureRate
+        expr: rate(webhook_deliveries_total{status="failed"}[5m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: agent-service
+        annotations:
+          summary: "High webhook delivery failure rate"
+          description: "Webhook failure rate is {{ $value }} failures/sec for {{ $labels.event_type }}"
+
+      # RAG query latency high
+      - alert: HighRAGQueryLatency
+        expr: histogram_quantile(0.95, rate(rag_query_duration_seconds_bucket[5m])) > 2
+        for: 10m
+        labels:
+          severity: warning
+          service: agent-service
+        annotations:
+          summary: "RAG query latency is high"
+          description: "95th percentile RAG query latency is {{ $value }}s"
+
+      # No agent executions (possible issue)
+      - alert: NoAgentExecutions
+        expr: rate(agent_executions_total[10m]) == 0
+        for: 30m
+        labels:
+          severity: warning
+          service: agent-service
+        annotations:
+          summary: "No agent executions detected"
+          description: "No agent executions in the last 30 minutes - possible issue"

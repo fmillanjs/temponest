@@ -1,0 +1,111 @@
+# AlertManager Configuration
+
+global:
+  resolve_timeout: 5m
+  # SMTP configuration for email alerts (configure as needed)
+  # smtp_smarthost: 'smtp.gmail.com:587'
+  # smtp_from: 'alerts@example.com'
+  # smtp_auth_username: 'alerts@example.com'
+  # smtp_auth_password: 'password'
+
+# Templates for alert notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alerts
+route:
+  # Default receiver
+  receiver: 'default'
+
+  # Group alerts by these labels
+  group_by: ['alertname', 'service', 'tenant_id']
+
+  # Wait before sending notification for a group
+  group_wait: 10s
+
+  # Wait before sending notification about new alerts in a group
+  group_interval: 10s
+
+  # Wait before resending notification
+  repeat_interval: 4h
+
+  # Child routes
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 0s
+      repeat_interval: 1h
+
+    # Budget alerts - send to budget team
+    - match_re:
+        alertname: 'Budget.*'
+      receiver: 'budget-alerts'
+      group_interval: 5m
+
+    # Cost-related alerts
+    - match:
+        alertname: 'HighCostBurnRate'
+      receiver: 'cost-alerts'
+
+    # Service health alerts
+    - match_re:
+        alertname: '.*Unhealthy|.*NotRunning'
+      receiver: 'ops-team'
+      repeat_interval: 30m
+
+# Inhibition rules - suppress alerts
+inhibit_rules:
+  # If service is down, don't alert on high error rates
+  - source_match:
+      alertname: 'ServiceComponentUnhealthy'
+    target_match:
+      alertname: 'HighAgentErrorRate'
+    equal: ['service']
+
+  # If scheduler is down, don't alert on agent service issues
+  - source_match:
+      alertname: 'SchedulerNotRunning'
+    target_match:
+      alertname: 'AgentServiceUnhealthy'
+
+# Receivers - where to send alerts
+receivers:
+  # Default receiver (logs only)
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/prometheus'
+        send_resolved: true
+
+  # Critical alerts - multiple channels
+  - name: 'critical-alerts'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/critical'
+        send_resolved: true
+    # Add email, Slack, PagerDuty, etc. here
+    # email_configs:
+    #   - to: 'oncall@example.com'
+    #     subject: '[CRITICAL] {{ .GroupLabels.alertname }}'
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/...'
+    #     channel: '#alerts-critical'
+
+  # Budget alerts
+  - name: 'budget-alerts'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/budget'
+        send_resolved: true
+    # Add specific budget team notification channels
+
+  # Cost alerts
+  - name: 'cost-alerts'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/cost'
+        send_resolved: true
+
+  # Ops team
+  - name: 'ops-team'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/ops'
+        send_resolved: true

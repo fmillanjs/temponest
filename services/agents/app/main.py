@@ -288,6 +288,21 @@ app.include_router(webhooks_router.router)
 from routers import collaboration as collaboration_router
 app.include_router(collaboration_router.router)
 
+# Prometheus metrics
+from prometheus_client import make_asgi_app
+from metrics import MetricsRecorder, service_info
+
+# Initialize service info
+service_info.info({
+    'version': '1.0.0',
+    'service': 'agent-service',
+    'environment': 'production'
+})
+
+# Mount prometheus metrics endpoint
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
+
 
 # Token counting utility
 def count_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
