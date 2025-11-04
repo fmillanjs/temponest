@@ -87,117 +87,102 @@ def visualization_page():
 # API Endpoints
 @app.route("/api/agents", methods=["GET"])
 def api_list_agents():
-    """List agents"""
+    """List agents - Returns empty array as SDK endpoints not available"""
     try:
-        client = get_client()
-        limit = int(request.args.get("limit", 100))
-        agents = client.agents.list(limit=limit)
-        return jsonify([agent.model_dump() for agent in agents])
+        # Return empty array since SDK agents endpoints don't exist yet
+        # Use /api/visualization/agents-hierarchy for actual agent data
+        return jsonify([])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/agents", methods=["POST"])
 def api_create_agent():
-    """Create agent"""
-    try:
-        client = get_client()
-        data = request.json
-        agent = client.agents.create(**data)
-        return jsonify(agent.model_dump())
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Create agent - Not implemented"""
+    return jsonify({"error": "Use agent service directly for CRUD operations"}), 501
 
 
 @app.route("/api/agents/<agent_id>", methods=["GET"])
 def api_get_agent(agent_id):
-    """Get agent"""
-    try:
-        client = get_client()
-        agent = client.agents.get(agent_id)
-        return jsonify(agent.model_dump())
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Get agent - Not implemented"""
+    return jsonify({"error": "Use agent service directly"}), 501
 
 
 @app.route("/api/agents/<agent_id>", methods=["DELETE"])
 def api_delete_agent(agent_id):
-    """Delete agent"""
-    try:
-        client = get_client()
-        client.agents.delete(agent_id)
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Delete agent - Not implemented"""
+    return jsonify({"error": "Use agent service directly"}), 501
 
 
 @app.route("/api/agents/<agent_id>/execute", methods=["POST"])
 def api_execute_agent(agent_id):
-    """Execute agent"""
-    try:
-        client = get_client()
-        data = request.json
-        result = client.agents.execute(
-            agent_id=agent_id,
-            user_message=data.get("message"),
-            context=data.get("context", {})
-        )
-        return jsonify(result.model_dump())
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Execute agent - Not implemented"""
+    return jsonify({"error": "Use agent service directly"}), 501
 
 
 @app.route("/api/schedules", methods=["GET"])
 def api_list_schedules():
-    """List schedules"""
+    """List schedules - Returns empty array"""
     try:
-        client = get_client()
-        limit = int(request.args.get("limit", 100))
-        schedules = client.scheduler.list(limit=limit)
-        return jsonify([schedule.model_dump() for schedule in schedules])
+        # Return empty array since scheduler SDK endpoints don't exist yet
+        return jsonify([])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/schedules", methods=["POST"])
 def api_create_schedule():
-    """Create schedule"""
-    try:
-        client = get_client()
-        data = request.json
-        schedule = client.scheduler.create(
-            agent_id=data["agent_id"],
-            cron_expression=data["cron_expression"],
-            task_config=data.get("task_config", {})
-        )
-        return jsonify(schedule.model_dump())
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Create schedule - Not implemented"""
+    return jsonify({"error": "Use scheduler service directly"}), 501
 
 
 @app.route("/api/schedules/<schedule_id>", methods=["DELETE"])
 def api_delete_schedule(schedule_id):
-    """Delete schedule"""
-    try:
-        client = get_client()
-        client.scheduler.delete(schedule_id)
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Delete schedule - Not implemented"""
+    return jsonify({"error": "Use scheduler service directly"}), 501
 
 
 @app.route("/api/costs/summary", methods=["GET"])
 def api_cost_summary():
-    """Get cost summary"""
+    """Get cost summary from database"""
     try:
-        client = get_client()
         start_date = request.args.get("start_date")
         end_date = request.args.get("end_date")
-        summary = client.costs.get_summary(
-            start_date=start_date,
-            end_date=end_date
-        )
-        return jsonify(summary.model_dump())
+
+        async def fetch_costs():
+            conn = await get_db_connection()
+            try:
+                # Build query based on whether dates are provided
+                if start_date and end_date:
+                    query = f"""
+                        SELECT
+                            COALESCE(SUM(total_cost_usd), 0) as total_usd,
+                            COALESCE(SUM(total_tokens), 0) as total_tokens,
+                            COUNT(*) as total_executions
+                        FROM cost_tracking
+                        WHERE created_at::date >= '{start_date}'::date
+                        AND created_at::date <= '{end_date}'::date
+                    """
+                else:
+                    query = """
+                        SELECT
+                            COALESCE(SUM(total_cost_usd), 0) as total_usd,
+                            COALESCE(SUM(total_tokens), 0) as total_tokens,
+                            COUNT(*) as total_executions
+                        FROM cost_tracking
+                    """
+
+                row = await conn.fetchrow(query)
+                result = dict(row) if row else {"total_usd": 0, "total_tokens": 0, "total_executions": 0}
+                # Convert Decimal to float for JSON serialization
+                if result.get('total_usd') is not None:
+                    result['total_usd'] = float(result['total_usd'])
+                return result
+            finally:
+                await conn.close()
+
+        summary = asyncio.run(fetch_costs())
+        return jsonify(summary)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
