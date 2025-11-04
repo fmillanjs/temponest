@@ -62,6 +62,7 @@ langfuse_tracer: Optional[LangfuseTracer] = None
 overseer_agent: Optional[Any] = None  # Can be OverseerAgent or future OverseerAgentV2
 developer_agent: Optional[Any] = None  # Can be DeveloperAgent or DeveloperAgentV2
 qa_tester_agent: Optional[Any] = None  # QA Tester Agent
+devops_agent: Optional[Any] = None  # DevOps Agent
 department_manager: Optional[DepartmentManager] = None
 idempotency_cache: Dict[str, AgentResponse] = {}
 
@@ -69,7 +70,7 @@ idempotency_cache: Dict[str, AgentResponse] = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic"""
-    global rag_memory, langfuse_tracer, overseer_agent, developer_agent, qa_tester_agent, department_manager
+    global rag_memory, langfuse_tracer, overseer_agent, developer_agent, qa_tester_agent, devops_agent, department_manager
 
     # Startup
     print("🚀 Starting Agent Service...")
@@ -116,6 +117,12 @@ async def lifespan(app: FastAPI):
         tracer=langfuse_tracer
     )
     print(f"   QA Tester initialized")
+
+    devops_agent = AgentFactory.create_devops(
+        rag_memory=rag_memory,
+        tracer=langfuse_tracer
+    )
+    print(f"   DevOps initialized")
 
     # Initialize Department Manager (new organizational structure)
     print("\n🏢 Loading Organizational Structure...")
@@ -205,6 +212,7 @@ async def health_check():
         "overseer": "ready" if overseer_agent else "not_initialized",
         "developer": "ready" if developer_agent else "not_initialized",
         "qa_tester": "ready" if qa_tester_agent else "not_initialized",
+        "devops": "ready" if devops_agent else "not_initialized",
     }
 
     return HealthResponse(
@@ -467,6 +475,98 @@ async def run_qa_tester(
                 "max_tokens": settings.MODEL_MAX_TOKENS * 2,
                 "seed": settings.MODEL_SEED,
                 "agent": "qa_tester"
+            }
+        )
+
+        # Cache for idempotency
+        if request.idempotency_key:
+            idempotency_cache[request.idempotency_key] = response
+
+        return response
+
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+        return AgentResponse(
+            task_id=task_id,
+            status="failed",
+            citations=[],
+            tokens_used=0,
+            latency_ms=latency_ms,
+            model_info={"model": settings.CODE_MODEL},
+            error=str(e)
+        )
+
+
+@app.post("/devops/run", response_model=AgentResponse)
+async def run_devops(
+    request: AgentRequest,
+    current_user: AuthContext = Depends(require_permission("agents:execute"))
+):
+    """
+    Run the DevOps agent to generate infrastructure code.
+
+    The DevOps Agent:
+    - Generates Kubernetes manifests (Deployments, Services, ConfigMaps)
+    - Creates Terraform configurations for cloud infrastructure
+    - Optimizes Docker builds (multi-stage, caching, security)
+    - Generates CI/CD pipelines (GitHub Actions, GitLab CI)
+    - Creates Helm charts for application deployment
+    - Applies infrastructure best practices and security hardening
+
+    Requires: agents:execute permission
+    """
+    if not devops_agent:
+        raise HTTPException(status_code=503, detail="DevOps agent not initialized")
+
+    # Check idempotency
+    if request.idempotency_key and request.idempotency_key in idempotency_cache:
+        return idempotency_cache[request.idempotency_key]
+
+    # Enforce budget (Infrastructure needs more tokens)
+    if not enforce_budget(request.task, budget=settings.BUDGET_TOKENS_PER_TASK * 2):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Task exceeds token budget of {settings.BUDGET_TOKENS_PER_TASK * 2}"
+        )
+
+    task_id = str(uuid4())
+    start_time = time.time()
+
+    try:
+        # Run agent
+        result = await devops_agent.execute(
+            task=request.task,
+            context=request.context or {},
+            task_id=task_id
+        )
+
+        # Validate citations
+        citations = result.get("citations", [])
+        if not validate_citations(citations):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient grounding: found {len(citations)} citations, need ≥2 with score ≥{settings.RAG_MIN_SCORE}"
+            )
+
+        # Check latency SLO (relaxed for infrastructure generation)
+        latency_ms = int((time.time() - start_time) * 1000)
+        if latency_ms > settings.LATENCY_SLO_MS * 2:
+            print(f"⚠️  SLO violated: {latency_ms}ms > {settings.LATENCY_SLO_MS * 2}ms")
+
+        response = AgentResponse(
+            task_id=task_id,
+            status="completed",
+            result=result,
+            citations=citations,
+            tokens_used=count_tokens(str(result)),
+            latency_ms=latency_ms,
+            model_info={
+                "model": settings.CODE_MODEL,
+                "temperature": settings.MODEL_TEMPERATURE,
+                "top_p": settings.MODEL_TOP_P,
+                "max_tokens": settings.MODEL_MAX_TOKENS * 2,
+                "seed": settings.MODEL_SEED,
+                "agent": "devops"
             }
         )
 
