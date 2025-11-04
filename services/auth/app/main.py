@@ -79,6 +79,13 @@ async def health_check():
 app.include_router(auth.router)
 app.include_router(api_keys.router)
 
+# Prometheus metrics
+from prometheus_client import make_asgi_app
+
+# Mount prometheus metrics endpoint
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
+
 
 if __name__ == "__main__":
     import uvicorn

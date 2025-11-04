@@ -30,7 +30,7 @@ scrape_configs:
   - job_name: 'agent-service'
     static_configs:
       - targets: ['agents:9000']
-    metrics_path: '/metrics'
+    metrics_path: '/metrics/'
     scrape_interval: 10s
     relabel_configs:
       - source_labels: [__address__]
@@ -41,7 +41,7 @@ scrape_configs:
   - job_name: 'scheduler-service'
     static_configs:
       - targets: ['scheduler:9003']
-    metrics_path: '/metrics'
+    metrics_path: '/metrics/'
     scrape_interval: 10s
     relabel_configs:
       - source_labels: [__address__]
@@ -52,7 +52,7 @@ scrape_configs:
   - job_name: 'auth-service'
     static_configs:
       - targets: ['auth:9002']
-    metrics_path: '/metrics'
+    metrics_path: '/metrics/'
     scrape_interval: 10s
     scrape_timeout: 5s
     relabel_configs:

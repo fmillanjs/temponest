@@ -1058,12 +1058,12 @@ async def run_security_auditor(
         )
 
 
-@app.get("/metrics")
-async def get_metrics(
+@app.get("/api/metrics")
+async def get_api_metrics(
     current_user: AuthContext = Depends(require_permission("agents:read"))
 ):
     """
-    Get operational metrics.
+    Get operational metrics (application-level).
 
     Requires: agents:read permission
     """
