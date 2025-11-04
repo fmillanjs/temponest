@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir /tmp/sdk && rm -rf /tmp/sdk
 
 # Copy requirements and install
 COPY web-ui/requirements.txt .
-RUN pip install --no-cache-dir Flask>=3.0.0 python-dotenv>=1.0.0 requests>=2.31.0 PyYAML>=6.0
+RUN pip install --no-cache-dir Flask>=3.0.0 python-dotenv>=1.0.0 requests>=2.31.0 PyYAML>=6.0 asyncpg>=0.30.0
 
 # Copy application
 COPY web-ui/ .

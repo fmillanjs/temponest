@@ -459,6 +459,12 @@ services:
     environment:
       - TEMPONEST_BASE_URL=http://agents:9000
       - TEMPONEST_AUTH_TOKEN=${AUTH_TOKEN:-}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=agentic
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - PROMETHEUS_URL=http://agentic-prometheus:9090
     volumes:
       - ../web-ui:/app
       - ../config:/config

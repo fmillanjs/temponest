@@ -265,15 +265,70 @@
             <h1>🏢 Agentic Company Visualization</h1>
             <p>Interactive view of your AI organization structure and workflows</p>
             <div class="tabs">
-                <button class="tab active" onclick="switchView('hierarchy')">Department Hierarchy</button>
-                <button class="tab" onclick="switchView('workflow')">Workflows</button>
-                <button class="tab" onclick="switchView('agents')">Agents by Department</button>
+                <button class="tab active" onclick="switchView('analytics')">📊 Analytics</button>
+                <button class="tab" onclick="switchView('executions')">⚡ Live Executions</button>
+                <button class="tab" onclick="switchView('agent-load')">📈 Agent Load</button>
+                <button class="tab" onclick="switchView('hierarchy')">🏢 Hierarchy</button>
+                <button class="tab" onclick="switchView('workflow')">🔄 Workflows</button>
+                <button class="tab" onclick="switchView('agents')">👥 Agents</button>
             </div>
         </header>
 
         <div class="content">
+            <!-- Analytics Dashboard View -->
+            <div id="analytics-view" class="view active">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px;">
+                    <div class="card" style="text-align: center;">
+                        <h3>Total Executions</h3>
+                        <div class="metric" id="total-executions">-</div>
+                        <div class="metric-label">All time</div>
+                    </div>
+                    <div class="card" style="text-align: center;">
+                        <h3>Last 24 Hours</h3>
+                        <div class="metric" id="last-24h-executions">-</div>
+                        <div class="metric-label">Executions</div>
+                    </div>
+                    <div class="card" style="text-align: center;">
+                        <h3>Currently Running</h3>
+                        <div class="metric" id="currently-running" style="color: #10b981;">-</div>
+                        <div class="metric-label">Active now</div>
+                    </div>
+                    <div class="card" style="text-align: center;">
+                        <h3>Avg Latency</h3>
+                        <div class="metric" id="avg-latency">-</div>
+                        <div class="metric-label">milliseconds</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Top Agents (Last 7 Days)</h3>
+                    <div id="top-agents-chart" style="margin-top: 20px;"></div>
+                </div>
+            </div>
+
+            <!-- Live Executions View -->
+            <div id="executions-view" class="view">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 style="margin: 0;">Recent Executions</h2>
+                    <button class="btn" onclick="refreshExecutions()">🔄 Refresh</button>
+                </div>
+                <div id="executions-content" style="overflow-y: auto; max-height: calc(100vh - 250px);">
+                    <div class="loading">Loading executions...</div>
+                </div>
+            </div>
+
+            <!-- Agent Load View -->
+            <div id="agent-load-view" class="view">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 style="margin: 0;">Agent Utilization</h2>
+                    <button class="btn" onclick="refreshAgentLoad()">🔄 Refresh</button>
+                </div>
+                <div id="agent-load-content">
+                    <div class="loading">Loading agent load...</div>
+                </div>
+            </div>
+
             <!-- Department Hierarchy View -->
-            <div id="hierarchy-view" class="view active">
+            <div id="hierarchy-view" class="view">
                 <div class="loading">Loading department hierarchy...</div>
             </div>
 
@@ -309,6 +364,16 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             loadAllData();
+            loadAnalytics();
+            loadExecutions();
+            loadAgentLoad();
+
+            // Auto-refresh every 30 seconds
+            setInterval(() => {
+                if (currentView === 'analytics') loadAnalytics();
+                if (currentView === 'executions') loadExecutions();
+                if (currentView === 'agent-load') loadAgentLoad();
+            }, 30000);
         });
 
         async function loadAllData() {
@@ -331,6 +396,182 @@
             } catch (error) {
                 console.error('Failed to load data:', error);
             }
+        }
+
+        async function loadAnalytics() {
+            try {
+                const data = await fetch('/api/analytics/dashboard').then(r => r.json());
+
+                document.getElementById('total-executions').textContent = data.overall.total_executions?.toLocaleString() || '0';
+                document.getElementById('last-24h-executions').textContent = data.overall.last_24h_executions?.toLocaleString() || '0';
+                document.getElementById('currently-running').textContent = data.overall.currently_running || '0';
+                document.getElementById('avg-latency').textContent = data.overall.avg_latency ? `${Math.round(data.overall.avg_latency)}ms` : '-';
+
+                // Render top agents chart
+                const chartContainer = document.getElementById('top-agents-chart');
+                chartContainer.innerHTML = '';
+
+                if (data.top_agents && data.top_agents.length > 0) {
+                    const maxExecs = Math.max(...data.top_agents.map(a => a.executions));
+
+                    data.top_agents.forEach(agent => {
+                        const percent = (agent.executions / maxExecs) * 100;
+                        chartContainer.innerHTML += `
+                            <div style="margin-bottom: 15px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                    <span style="font-weight: 600;">${agent.agent_name}</span>
+                                    <span style="color: #94a3b8;">${agent.executions} executions</span>
+                                </div>
+                                <div style="width: 100%; height: 10px; background: #1e293b; border-radius: 5px; overflow: hidden;">
+                                    <div style="width: ${percent}%; height: 100%; background: #3b82f6;"></div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load analytics:', error);
+            }
+        }
+
+        async function loadExecutions() {
+            try {
+                const executions = await fetch('/api/analytics/executions/recent?limit=50').then(r => r.json());
+                const container = document.getElementById('executions-content');
+                container.innerHTML = '';
+
+                if (executions.length === 0) {
+                    container.innerHTML = '<p class="loading">No executions found</p>';
+                    return;
+                }
+
+                executions.forEach(exec => {
+                    const statusColor = exec.status === 'completed' ? '#10b981' : exec.status === 'failed' ? '#ef4444' : '#f59e0b';
+                    const card = document.createElement('div');
+                    card.className = 'workflow-card';
+                    card.style.borderLeftColor = statusColor;
+
+                    const date = new Date(exec.created_at);
+                    const timeAgo = getTimeAgo(date);
+
+                    card.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                            <div>
+                                <strong>${exec.agent_name}</strong>
+                                <div style="color: #94a3b8; font-size: 13px; margin-top: 3px;">
+                                    ${exec.model_provider} / ${exec.model_name}
+                                </div>
+                            </div>
+                            <span class="badge" style="background: ${statusColor};">${exec.status.toUpperCase()}</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-size: 13px; color: #cbd5e1;">
+                            <div>
+                                <div style="color: #94a3b8;">Tokens</div>
+                                <strong>${exec.total_tokens?.toLocaleString() || '0'}</strong>
+                            </div>
+                            <div>
+                                <div style="color: #94a3b8;">Cost</div>
+                                <strong>$${(exec.total_cost_usd || 0).toFixed(4)}</strong>
+                            </div>
+                            <div>
+                                <div style="color: #94a3b8;">Latency</div>
+                                <strong>${exec.latency_ms ? exec.latency_ms + 'ms' : '-'}</strong>
+                            </div>
+                            <div>
+                                <div style="color: #94a3b8;">Time</div>
+                                <strong>${timeAgo}</strong>
+                            </div>
+                        </div>
+                    `;
+
+                    container.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Failed to load executions:', error);
+            }
+        }
+
+        async function loadAgentLoad() {
+            try {
+                const stats = await fetch('/api/analytics/agents/stats').then(r => r.json());
+                const container = document.getElementById('agent-load-content');
+                container.innerHTML = '';
+
+                if (stats.length === 0) {
+                    container.innerHTML = '<p class="loading">No agent data available</p>';
+                    return;
+                }
+
+                const grid = document.createElement('div');
+                grid.className = 'agent-grid';
+
+                stats.forEach(agent => {
+                    const failRate = agent.total_executions > 0 ? ((agent.failed_count / agent.total_executions) * 100).toFixed(1) : 0;
+                    const isRunning = agent.currently_running > 0;
+
+                    const card = document.createElement('div');
+                    card.className = 'agent-card';
+                    card.style.borderTopColor = isRunning ? '#10b981' : '#3b82f6';
+
+                    card.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <h4>${agent.agent_name}</h4>
+                            ${isRunning ? '<span class="badge badge-success">RUNNING</span>' : '<span class="badge" style="background: #334155;">IDLE</span>'}
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 15px; font-size: 14px;">
+                            <div>
+                                <div style="color: #94a3b8;">Total Executions</div>
+                                <strong style="font-size: 18px; color: #60a5fa;">${agent.total_executions?.toLocaleString() || '0'}</strong>
+                            </div>
+                            <div>
+                                <div style="color: #94a3b8;">Currently Running</div>
+                                <strong style="font-size: 18px; color: #10b981;">${agent.currently_running || 0}</strong>
+                            </div>
+                            <div>
+                                <div style="color: #94a3b8;">Avg Latency</div>
+                                <strong>${agent.avg_latency_ms ? Math.round(agent.avg_latency_ms) + 'ms' : '-'}</strong>
+                            </div>
+                            <div>
+                                <div style="color: #94a3b8;">Failure Rate</div>
+                                <strong style="color: ${failRate > 5 ? '#ef4444' : '#10b981'};">${failRate}%</strong>
+                            </div>
+                            <div>
+                                <div style="color: #94a3b8;">Total Cost</div>
+                                <strong>$${(agent.total_cost_usd || 0).toFixed(2)}</strong>
+                            </div>
+                            <div>
+                                <div style="color: #94a3b8;">Avg Cost</div>
+                                <strong>$${(agent.avg_cost_per_execution || 0).toFixed(4)}</strong>
+                            </div>
+                        </div>
+                    `;
+
+                    grid.appendChild(card);
+                });
+
+                container.appendChild(grid);
+            } catch (error) {
+                console.error('Failed to load agent load:', error);
+            }
+        }
+
+        function refreshExecutions() {
+            loadExecutions();
+        }
+
+        function refreshAgentLoad() {
+            loadAgentLoad();
+        }
+
+        function getTimeAgo(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+            if (seconds < 60) return 'just now';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            const days = Math.floor(hours / 24);
+            return `${days}d ago`;
         }
 
         function switchView(view) {
