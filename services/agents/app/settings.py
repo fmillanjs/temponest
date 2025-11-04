@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # Qdrant
     QDRANT_URL: str = "http://qdrant:6333"
 
+    # Database
+    DATABASE_URL: str = "postgresql://postgres:postgres@postgres:5432/agentic"
+
     # Langfuse
     LANGFUSE_PUBLIC_KEY: Optional[str] = None
     LANGFUSE_SECRET_KEY: Optional[str] = None

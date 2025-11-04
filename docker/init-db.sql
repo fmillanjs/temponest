@@ -55,3 +55,6 @@ CREATE INDEX idx_audit_created ON audit_log(created_at DESC);
 
 -- Run auth system migration
 \i /docker-entrypoint-initdb.d/migrations/002_auth_system.sql
+
+-- Run cost tracking migration
+\i /docker-entrypoint-initdb.d/migrations/003_cost_tracking.sql
