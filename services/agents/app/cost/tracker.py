@@ -60,6 +60,9 @@ class CostTracker:
         total_tokens = input_tokens + output_tokens
 
         # Insert into cost_tracking table
+        import json
+        context_json = json.dumps(context) if context else None
+
         async with self.db_pool.acquire() as conn:
             await conn.execute(
                 """
@@ -70,14 +73,14 @@ class CostTracker:
                     input_tokens, output_tokens, total_tokens,
                     input_cost_usd, output_cost_usd, total_cost_usd,
                     latency_ms, status, context
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb)
                 """,
                 task_id, agent_name, user_id, tenant_id,
                 project_id, workflow_id,
                 model_provider, model_name,
                 input_tokens, output_tokens, total_tokens,
                 input_cost, output_cost, total_cost,
-                latency_ms, status, context
+                latency_ms, status, context_json
             )
 
             # Check and update budgets

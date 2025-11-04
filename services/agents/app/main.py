@@ -412,7 +412,7 @@ async def run_overseer(
             tokens_used=count_tokens(str(result)),
             latency_ms=latency_ms,
             model_info={
-                "model": settings.CHAT_MODEL,
+                "model": settings.get_model_for_agent("overseer"),
                 "temperature": settings.MODEL_TEMPERATURE,
                 "top_p": settings.MODEL_TOP_P,
                 "max_tokens": settings.MODEL_MAX_TOKENS,
@@ -434,7 +434,7 @@ async def run_overseer(
             citations=[],
             tokens_used=0,
             latency_ms=latency_ms,
-            model_info={"model": settings.CHAT_MODEL},
+            model_info={"model": settings.get_model_for_agent("overseer")},
             error=str(e)
         )
 
@@ -518,7 +518,7 @@ async def run_developer(
             tokens_used=tokens_used,
             latency_ms=latency_ms,
             model_info={
-                "model": settings.CODE_MODEL,
+                "model": settings.get_model_for_agent("developer"),
                 "temperature": settings.MODEL_TEMPERATURE,
                 "top_p": settings.MODEL_TOP_P,
                 "max_tokens": settings.MODEL_MAX_TOKENS,
@@ -555,7 +555,7 @@ async def run_developer(
             citations=[],
             tokens_used=0,
             latency_ms=latency_ms,
-            model_info={"model": settings.CODE_MODEL},
+            model_info={"model": settings.get_model_for_agent("developer")},
             error=str(e)
         )
 
@@ -623,7 +623,7 @@ async def run_qa_tester(
             tokens_used=count_tokens(str(result)),
             latency_ms=latency_ms,
             model_info={
-                "model": settings.CODE_MODEL,
+                "model": settings.get_model_for_agent("developer"),
                 "temperature": settings.MODEL_TEMPERATURE,
                 "top_p": settings.MODEL_TOP_P,
                 "max_tokens": settings.MODEL_MAX_TOKENS * 2,
@@ -646,7 +646,7 @@ async def run_qa_tester(
             citations=[],
             tokens_used=0,
             latency_ms=latency_ms,
-            model_info={"model": settings.CODE_MODEL},
+            model_info={"model": settings.get_model_for_agent("developer")},
             error=str(e)
         )
 
@@ -715,7 +715,7 @@ async def run_devops(
             tokens_used=count_tokens(str(result)),
             latency_ms=latency_ms,
             model_info={
-                "model": settings.CODE_MODEL,
+                "model": settings.get_model_for_agent("developer"),
                 "temperature": settings.MODEL_TEMPERATURE,
                 "top_p": settings.MODEL_TOP_P,
                 "max_tokens": settings.MODEL_MAX_TOKENS * 2,
@@ -738,7 +738,7 @@ async def run_devops(
             citations=[],
             tokens_used=0,
             latency_ms=latency_ms,
-            model_info={"model": settings.CODE_MODEL},
+            model_info={"model": settings.get_model_for_agent("developer")},
             error=str(e)
         )
 
@@ -807,7 +807,7 @@ async def run_designer(
             tokens_used=count_tokens(str(result)),
             latency_ms=latency_ms,
             model_info={
-                "model": settings.CODE_MODEL,
+                "model": settings.get_model_for_agent("developer"),
                 "temperature": 0.3,  # Slightly higher for creative design
                 "top_p": settings.MODEL_TOP_P,
                 "max_tokens": settings.MODEL_MAX_TOKENS * 2,
@@ -830,7 +830,7 @@ async def run_designer(
             citations=[],
             tokens_used=0,
             latency_ms=latency_ms,
-            model_info={"model": settings.CODE_MODEL},
+            model_info={"model": settings.get_model_for_agent("developer")},
             error=str(e)
         )
 
@@ -900,7 +900,7 @@ async def run_security_auditor(
             tokens_used=count_tokens(str(result)),
             latency_ms=latency_ms,
             model_info={
-                "model": settings.CODE_MODEL,
+                "model": settings.get_model_for_agent("developer"),
                 "temperature": 0.1,  # Very low for precise security analysis
                 "top_p": settings.MODEL_TOP_P,
                 "max_tokens": settings.MODEL_MAX_TOKENS * 2,
@@ -923,7 +923,7 @@ async def run_security_auditor(
             citations=[],
             tokens_used=0,
             latency_ms=latency_ms,
-            model_info={"model": settings.CODE_MODEL},
+            model_info={"model": settings.get_model_for_agent("developer")},
             error=str(e)
         )
 

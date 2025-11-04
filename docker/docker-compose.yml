@@ -228,6 +228,7 @@ services:
       - "9000:9000"
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_API_BASE=http://ollama:11434
       - QDRANT_URL=http://qdrant:6333
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/agentic
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
@@ -235,12 +236,14 @@ services:
       - LANGFUSE_HOST=http://langfuse:3000
       - AUTH_SERVICE_URL=http://auth:9002
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-CHANGE-ME-IN-PRODUCTION-USE-LONG-RANDOM-STRING}
+      - OVERSEER_PROVIDER=${OVERSEER_PROVIDER:-ollama}
+      - DEVELOPER_PROVIDER=${DEVELOPER_PROVIDER:-ollama}
       - BUDGET_TOKENS_PER_TASK=${BUDGET_TOKENS_PER_TASK:-8000}
       - LATENCY_SLO_MS=${LATENCY_SLO_MS:-5000}
       - RAG_TOP_K=${RAG_TOP_K:-5}
       - RAG_MIN_SCORE=${RAG_MIN_SCORE:-0.7}
-      - CHAT_MODEL=${CHAT_MODEL:-mistral:7b-instruct}
-      - CODE_MODEL=${CODE_MODEL:-qwen2.5-coder:7b}
+      - OLLAMA_CHAT_MODEL=${OLLAMA_CHAT_MODEL:-mistral:7b-instruct}
+      - OLLAMA_CODE_MODEL=${OLLAMA_CODE_MODEL:-qwen2.5-coder:7b}
       - MODEL_TEMPERATURE=${MODEL_TEMPERATURE:-0.2}
       - MODEL_TOP_P=${MODEL_TOP_P:-0.9}
       - MODEL_MAX_TOKENS=${MODEL_MAX_TOKENS:-2048}

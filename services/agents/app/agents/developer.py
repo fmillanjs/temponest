@@ -42,6 +42,9 @@ class DeveloperAgent:
         self.seed = seed
 
         # Create the agent
+        # Format model name for Ollama (litellm format)
+        llm_model = f"ollama/{code_model}" if not code_model.startswith("ollama/") else code_model
+
         self.agent = Agent(
             role="Senior Full-Stack Developer",
             goal="Generate production-ready code for APIs, schemas, and frontend components",
@@ -65,13 +68,7 @@ class DeveloperAgent:
                 self._create_validate_syntax_tool(),
                 self._create_generate_tests_tool()
             ],
-            llm_config={
-                "model": code_model,
-                "temperature": temperature,
-                "top_p": top_p,
-                "max_tokens": max_tokens,
-                "seed": seed
-            }
+            llm=llm_model
         )
 
     def _create_search_code_examples_tool(self):
