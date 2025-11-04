@@ -4,7 +4,7 @@ Cost Tracker - Records and manages cost tracking for agent executions.
 Stores costs in PostgreSQL and checks against budgets.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 from decimal import Decimal
 from uuid import UUID
 import asyncpg
@@ -12,20 +12,30 @@ from datetime import datetime
 
 from .calculator import CostCalculator
 
+if TYPE_CHECKING:
+    from ..webhooks.event_dispatcher import EventDispatcher
+
 
 class CostTracker:
     """Track costs and manage budgets"""
 
-    def __init__(self, db_pool: asyncpg.Pool, calculator: CostCalculator):
+    def __init__(
+        self,
+        db_pool: asyncpg.Pool,
+        calculator: CostCalculator,
+        event_dispatcher: Optional['EventDispatcher'] = None
+    ):
         """
         Initialize cost tracker.
 
         Args:
             db_pool: AsyncPG connection pool
             calculator: Cost calculator instance
+            event_dispatcher: Optional event dispatcher for budget alerts
         """
         self.db_pool = db_pool
         self.calculator = calculator
+        self.event_dispatcher = event_dispatcher
 
     async def record_execution(
         self,
@@ -128,10 +138,58 @@ class CostTracker:
                 exceeded = True
 
             if row["alert_type"]:
-                alerts.append({
+                alert_info = {
                     "budget_id": str(row["budget_id"]),
                     "alert_type": row["alert_type"]
-                })
+                }
+                alerts.append(alert_info)
+
+                # Publish budget alert event
+                if self.event_dispatcher and row["alert_type"]:
+                    try:
+                        # Get budget details for the event
+                        budget = await conn.fetchrow(
+                            """
+                            SELECT
+                                budget_type, budget_amount_usd, current_spend_usd,
+                                alert_threshold_pct, critical_threshold_pct,
+                                tenant_id, user_id, project_id
+                            FROM cost_budgets
+                            WHERE id = $1
+                            """,
+                            row["budget_id"]
+                        )
+
+                        if budget:
+                            # Determine event type based on alert
+                            event_type_map = {
+                                "warning": "budget.warning",
+                                "exceeded": "budget.exceeded",
+                                "critical": "budget.critical"
+                            }
+                            from ..webhooks.models import EventType
+                            event_type = EventType(event_type_map.get(row["alert_type"], "budget.warning"))
+
+                            await self.event_dispatcher.publish_event(
+                                event_type=event_type,
+                                event_id=str(row["budget_id"]),
+                                source="cost_tracker",
+                                tenant_id=budget["tenant_id"],
+                                user_id=budget["user_id"],
+                                project_id=budget["project_id"],
+                                workflow_id=None,
+                                data={
+                                    "alert_type": row["alert_type"],
+                                    "budget_id": str(row["budget_id"]),
+                                    "budget_type": budget["budget_type"],
+                                    "budget_amount_usd": float(budget["budget_amount_usd"]),
+                                    "current_spend_usd": float(budget["current_spend_usd"]),
+                                    "threshold_pct": budget["alert_threshold_pct"] if row["alert_type"] == "warning" else budget["critical_threshold_pct"],
+                                    "alert_time": datetime.utcnow().isoformat()
+                                }
+                            )
+                    except Exception as e:
+                        print(f"Failed to publish budget alert event: {e}")
 
         return {
             "within_budget": not exceeded,

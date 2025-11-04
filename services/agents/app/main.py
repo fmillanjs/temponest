@@ -129,16 +129,20 @@ async def lifespan(app: FastAPI):
 
         print(f"   ✅ Loaded pricing for {len(rows)} models")
 
-        # Initialize cost calculator and tracker
-        cost_calculator = CostCalculator(db_pricing=db_pricing)
-        cost_tracker = CostTracker(db_pool=db_pool, calculator=cost_calculator)
-        print("   ✅ Cost tracking initialized")
-
-        # Initialize webhook system
+        # Initialize webhook system first (needed by cost tracker)
         webhook_manager = WebhookManager(db_pool=db_pool)
         event_dispatcher = EventDispatcher(db_pool=db_pool)
         webhooks_router.set_webhook_manager(webhook_manager)
         print("   ✅ Webhook system initialized")
+
+        # Initialize cost calculator and tracker (with event dispatcher for alerts)
+        cost_calculator = CostCalculator(db_pricing=db_pricing)
+        cost_tracker = CostTracker(
+            db_pool=db_pool,
+            calculator=cost_calculator,
+            event_dispatcher=event_dispatcher
+        )
+        print("   ✅ Cost tracking initialized")
 
     except Exception as e:
         print(f"   ⚠️  Cost tracking/webhooks disabled: {e}")
@@ -491,6 +495,28 @@ async def run_developer(
     task_id = str(uuid4())
     start_time = time.time()
 
+    # Publish task.started event
+    if event_dispatcher:
+        try:
+            await event_dispatcher.publish_event(
+                event_type=EventType.TASK_STARTED,
+                event_id=task_id,
+                source="agents",
+                tenant_id=UUID(current_user.tenant_id),
+                user_id=UUID(current_user.user_id),
+                project_id=request.project_id,
+                workflow_id=request.workflow_id,
+                data={
+                    "task_id": task_id,
+                    "agent_name": "developer",
+                    "task_description": request.task[:200],  # Truncate for event payload
+                    "user_email": current_user.email,
+                    "started_at": datetime.utcnow().isoformat()
+                }
+            )
+        except Exception as e:
+            print(f"Failed to publish task.started event: {e}")
+
     try:
         # Run agent
         result = await developer_agent.execute(
@@ -528,6 +554,31 @@ async def run_developer(
             workflow_id=request.workflow_id,
             citations_count=len(citations)
         )
+
+        # Publish task.completed event
+        if event_dispatcher:
+            try:
+                await event_dispatcher.publish_event(
+                    event_type=EventType.TASK_COMPLETED,
+                    event_id=task_id,
+                    source="agents",
+                    tenant_id=UUID(current_user.tenant_id),
+                    user_id=UUID(current_user.user_id),
+                    project_id=request.project_id,
+                    workflow_id=request.workflow_id,
+                    data={
+                        "task_id": task_id,
+                        "agent_name": "developer",
+                        "status": "completed",
+                        "tokens_used": tokens_used,
+                        "latency_ms": latency_ms,
+                        "cost_usd": cost_info.get("total_cost_usd") if cost_info else None,
+                        "citations_count": len(citations),
+                        "completed_at": datetime.utcnow().isoformat()
+                    }
+                )
+            except Exception as e:
+                print(f"Failed to publish task.completed event: {e}")
 
         response = AgentResponse(
             task_id=task_id,
@@ -567,6 +618,28 @@ async def run_developer(
             latency_ms=latency_ms,
             status="failed"
         )
+
+        # Publish task.failed event
+        if event_dispatcher:
+            try:
+                await event_dispatcher.publish_event(
+                    event_type=EventType.TASK_FAILED,
+                    event_id=task_id,
+                    source="agents",
+                    tenant_id=UUID(current_user.tenant_id),
+                    user_id=UUID(current_user.user_id),
+                    project_id=request.project_id,
+                    workflow_id=request.workflow_id,
+                    data={
+                        "task_id": task_id,
+                        "agent_name": "developer",
+                        "error_message": str(e),
+                        "latency_ms": latency_ms,
+                        "failed_at": datetime.utcnow().isoformat()
+                    }
+                )
+            except Exception as event_error:
+                print(f"Failed to publish task.failed event: {event_error}")
 
         return AgentResponse(
             task_id=task_id,
