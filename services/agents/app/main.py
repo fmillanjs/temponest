@@ -6,7 +6,10 @@ FastAPI application that exposes CrewAI agents (Overseer, Developer) with RAG an
 import time
 from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional, List
-from uuid import uuid4
+from uuid import uuid4, UUID
+from datetime import datetime, timedelta
+from decimal import Decimal
+import asyncpg
 
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +29,8 @@ from auth_middleware import (
     require_permission,
     require_any_permission
 )
+from cost.calculator import CostCalculator
+from cost.tracker import CostTracker
 
 
 # Request/Response Models
@@ -35,6 +40,8 @@ class AgentRequest(BaseModel):
     context: Optional[Dict[str, Any]] = Field(default=None, description="Additional context")
     idempotency_key: Optional[str] = Field(default=None, description="Idempotency key for mutations")
     risk_level: str = Field(default="low", description="Risk level: low, medium, high")
+    project_id: Optional[str] = Field(default=None, description="Project ID for cost tracking")
+    workflow_id: Optional[str] = Field(default=None, description="Workflow ID for cost tracking")
 
 
 class AgentResponse(BaseModel):
@@ -46,6 +53,7 @@ class AgentResponse(BaseModel):
     tokens_used: int
     latency_ms: int
     model_info: Dict[str, Any]
+    cost_info: Optional[Dict[str, Any]] = None  # Cost tracking info
     error: Optional[str] = None
 
 
@@ -68,14 +76,62 @@ security_auditor_agent: Optional[Any] = None  # Security Auditor Agent
 department_manager: Optional[DepartmentManager] = None
 idempotency_cache: Dict[str, AgentResponse] = {}
 
+# Cost tracking
+db_pool: Optional[asyncpg.Pool] = None
+cost_calculator: Optional[CostCalculator] = None
+cost_tracker: Optional[CostTracker] = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic"""
     global rag_memory, langfuse_tracer, overseer_agent, developer_agent, qa_tester_agent, devops_agent, designer_agent, security_auditor_agent, department_manager
+    global db_pool, cost_calculator, cost_tracker
 
     # Startup
     print("🚀 Starting Agent Service...")
+
+    # Initialize database pool for cost tracking
+    print("💾 Initializing cost tracking...")
+    try:
+        db_pool = await asyncpg.create_pool(
+            settings.DATABASE_URL,
+            min_size=2,
+            max_size=10,
+            command_timeout=60
+        )
+        print("   ✅ Database pool created")
+
+        # Load pricing from database
+        async with db_pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT provider, model_name, input_price_per_1m, output_price_per_1m FROM model_pricing WHERE is_active = true"
+            )
+
+        # Build pricing dictionary
+        db_pricing = {}
+        for row in rows:
+            provider = row["provider"].lower()
+            model = row["model_name"]
+            if provider not in db_pricing:
+                db_pricing[provider] = {}
+            db_pricing[provider][model] = {
+                "input": Decimal(str(row["input_price_per_1m"])),
+                "output": Decimal(str(row["output_price_per_1m"]))
+            }
+
+        print(f"   ✅ Loaded pricing for {len(rows)} models")
+
+        # Initialize cost calculator and tracker
+        cost_calculator = CostCalculator(db_pricing=db_pricing)
+        cost_tracker = CostTracker(db_pool=db_pool, calculator=cost_calculator)
+        print("   ✅ Cost tracking initialized")
+
+    except Exception as e:
+        print(f"   ⚠️  Cost tracking disabled: {e}")
+        db_pool = None
+        cost_calculator = None
+        cost_tracker = None
 
     # Initialize auth client
     auth_client = AuthClient(
@@ -162,6 +218,9 @@ async def lifespan(app: FastAPI):
         langfuse_tracer.flush()
     if auth_client:
         await auth_client.close()
+    if db_pool:
+        await db_pool.close()
+        print("   Database pool closed")
 
 
 app = FastAPI(
@@ -215,6 +274,53 @@ def validate_citations(citations: List[Dict[str, Any]]) -> bool:
             return False
 
     return True
+
+
+# Cost tracking helper
+async def record_execution_cost(
+    task_id: str,
+    agent_name: str,
+    user_context: AuthContext,
+    model_provider: str,
+    model_name: str,
+    tokens_used: int,
+    latency_ms: int,
+    status: str = "completed",
+    project_id: Optional[str] = None,
+    workflow_id: Optional[str] = None,
+    citations_count: int = 0
+) -> Optional[Dict[str, Any]]:
+    """Record execution cost and check budgets"""
+    if not cost_tracker:
+        return None
+
+    try:
+        # Estimate input/output split (rough heuristic: 40% input, 60% output)
+        input_tokens = int(tokens_used * 0.4)
+        output_tokens = tokens_used - input_tokens
+
+        # Record execution
+        cost_info = await cost_tracker.record_execution(
+            task_id=task_id,
+            agent_name=agent_name,
+            user_id=user_context.user_id,
+            tenant_id=user_context.tenant_id,
+            model_provider=model_provider,
+            model_name=model_name,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            latency_ms=latency_ms,
+            status=status,
+            project_id=project_id,
+            workflow_id=workflow_id,
+            context={"citations_count": citations_count}
+        )
+
+        return cost_info
+
+    except Exception as e:
+        print(f"Failed to record cost: {e}")
+        return None
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -387,20 +493,39 @@ async def run_developer(
         if latency_ms > settings.LATENCY_SLO_MS:
             print(f"⚠️  SLO violated: {latency_ms}ms > {settings.LATENCY_SLO_MS}ms")
 
+        tokens_used = count_tokens(str(result))
+
+        # Record costs
+        cost_info = await record_execution_cost(
+            task_id=task_id,
+            agent_name="developer",
+            user_context=current_user,
+            model_provider=settings.DEVELOPER_PROVIDER,
+            model_name=settings.get_model_for_agent("developer"),
+            tokens_used=tokens_used,
+            latency_ms=latency_ms,
+            status="completed",
+            project_id=request.project_id,
+            workflow_id=request.workflow_id,
+            citations_count=len(citations)
+        )
+
         response = AgentResponse(
             task_id=task_id,
             status="completed",
             result=result,
             citations=citations,
-            tokens_used=count_tokens(str(result)),
+            tokens_used=tokens_used,
             latency_ms=latency_ms,
             model_info={
                 "model": settings.CODE_MODEL,
                 "temperature": settings.MODEL_TEMPERATURE,
                 "top_p": settings.MODEL_TOP_P,
                 "max_tokens": settings.MODEL_MAX_TOKENS,
-                "seed": settings.MODEL_SEED
-            }
+                "seed": settings.MODEL_SEED,
+                "agent": "developer"
+            },
+            cost_info=cost_info
         )
 
         # Cache for idempotency
@@ -411,6 +536,19 @@ async def run_developer(
 
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
+
+        # Record failed execution cost
+        await record_execution_cost(
+            task_id=task_id,
+            agent_name="developer",
+            user_context=current_user,
+            model_provider=settings.DEVELOPER_PROVIDER,
+            model_name=settings.get_model_for_agent("developer"),
+            tokens_used=0,
+            latency_ms=latency_ms,
+            status="failed"
+        )
+
         return AgentResponse(
             task_id=task_id,
             status="failed",
