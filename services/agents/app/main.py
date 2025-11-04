@@ -87,6 +87,9 @@ cost_tracker: Optional[CostTracker] = None
 webhook_manager: Optional[WebhookManager] = None
 event_dispatcher: Optional[EventDispatcher] = None
 
+# Collaboration system
+collaboration_manager: Optional[Any] = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -94,6 +97,7 @@ async def lifespan(app: FastAPI):
     global rag_memory, langfuse_tracer, overseer_agent, developer_agent, qa_tester_agent, devops_agent, designer_agent, security_auditor_agent, department_manager
     global db_pool, cost_calculator, cost_tracker
     global webhook_manager, event_dispatcher
+    global collaboration_manager
 
     # Startup
     print("🚀 Starting Agent Service...")
@@ -227,6 +231,23 @@ async def lifespan(app: FastAPI):
     # Inject department manager into router
     departments_router.set_department_manager(department_manager)
 
+    # Initialize Collaboration Manager
+    print("\n🤝 Initializing Collaboration Framework...")
+    from collaboration.manager import CollaborationManager
+    from collaboration.models import AgentRole
+
+    agents_dict = {
+        AgentRole.OVERSEER: overseer_agent,
+        AgentRole.DEVELOPER: developer_agent,
+        AgentRole.QA_TESTER: qa_tester_agent,
+        AgentRole.DEVOPS: devops_agent,
+        AgentRole.DESIGNER: designer_agent,
+        AgentRole.SECURITY_AUDITOR: security_auditor_agent
+    }
+
+    collaboration_manager = CollaborationManager(agents_dict=agents_dict)
+    print("   ✅ Collaboration manager initialized with 6 agents")
+
     print("✅ Agent Service ready!")
 
     yield
@@ -264,6 +285,8 @@ app.add_middleware(
 # Include routers
 app.include_router(departments_router.router)
 app.include_router(webhooks_router.router)
+from routers import collaboration as collaboration_router
+app.include_router(collaboration_router.router)
 
 
 # Token counting utility
