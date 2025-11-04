@@ -30,6 +30,10 @@ tiktoken>=0.7.0,<1.0.0
 tenacity>=8.2.0,<10.0.0
 numpy>=1.26.0,<2.0.0
 
+# Scheduling
+apscheduler>=3.10.0,<4.0.0
+croniter>=2.0.0,<3.0.0
+
 # Authentication
 PyJWT>=2.8.0,<3.0.0
 

@@ -61,3 +61,6 @@ CREATE INDEX idx_audit_created ON audit_log(created_at DESC);
 
 -- Run webhooks and events migration
 \i /docker-entrypoint-initdb.d/migrations/004_webhooks_events.sql
+
+-- Run scheduled tasks migration
+\i /docker-entrypoint-initdb.d/migrations/005_scheduled_tasks.sql
