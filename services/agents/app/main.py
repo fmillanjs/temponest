@@ -31,6 +31,8 @@ from auth_middleware import (
 )
 from cost.calculator import CostCalculator
 from cost.tracker import CostTracker
+from webhooks import EventDispatcher, WebhookManager, EventType
+from routers import webhooks as webhooks_router
 
 
 # Request/Response Models
@@ -81,12 +83,17 @@ db_pool: Optional[asyncpg.Pool] = None
 cost_calculator: Optional[CostCalculator] = None
 cost_tracker: Optional[CostTracker] = None
 
+# Webhook system
+webhook_manager: Optional[WebhookManager] = None
+event_dispatcher: Optional[EventDispatcher] = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic"""
     global rag_memory, langfuse_tracer, overseer_agent, developer_agent, qa_tester_agent, devops_agent, designer_agent, security_auditor_agent, department_manager
     global db_pool, cost_calculator, cost_tracker
+    global webhook_manager, event_dispatcher
 
     # Startup
     print("🚀 Starting Agent Service...")
@@ -127,11 +134,19 @@ async def lifespan(app: FastAPI):
         cost_tracker = CostTracker(db_pool=db_pool, calculator=cost_calculator)
         print("   ✅ Cost tracking initialized")
 
+        # Initialize webhook system
+        webhook_manager = WebhookManager(db_pool=db_pool)
+        event_dispatcher = EventDispatcher(db_pool=db_pool)
+        webhooks_router.set_webhook_manager(webhook_manager)
+        print("   ✅ Webhook system initialized")
+
     except Exception as e:
-        print(f"   ⚠️  Cost tracking disabled: {e}")
+        print(f"   ⚠️  Cost tracking/webhooks disabled: {e}")
         db_pool = None
         cost_calculator = None
         cost_tracker = None
+        webhook_manager = None
+        event_dispatcher = None
 
     # Initialize auth client
     auth_client = AuthClient(
@@ -218,6 +233,9 @@ async def lifespan(app: FastAPI):
         langfuse_tracer.flush()
     if auth_client:
         await auth_client.close()
+    if event_dispatcher:
+        await event_dispatcher.close()
+        print("   Event dispatcher closed")
     if db_pool:
         await db_pool.close()
         print("   Database pool closed")
@@ -241,6 +259,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(departments_router.router)
+app.include_router(webhooks_router.router)
 
 
 # Token counting utility

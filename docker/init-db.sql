@@ -58,3 +58,6 @@ CREATE INDEX idx_audit_created ON audit_log(created_at DESC);
 
 -- Run cost tracking migration
 \i /docker-entrypoint-initdb.d/migrations/003_cost_tracking.sql
+
+-- Run webhooks and events migration
+\i /docker-entrypoint-initdb.d/migrations/004_webhooks_events.sql
