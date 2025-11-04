@@ -5,6 +5,10 @@ from typing import Optional
 from .client import BaseClient, AsyncBaseClient
 from .agents import AgentsClient, AsyncAgentsClient
 from .scheduler import SchedulerClient, AsyncSchedulerClient
+from .rag import RAGClient, AsyncRAGClient
+from .collaboration import CollaborationClient, AsyncCollaborationClient
+from .costs import CostsClient, AsyncCostsClient
+from .webhooks import WebhooksClient, AsyncWebhooksClient
 
 
 class TemponestClient:
@@ -69,6 +73,10 @@ class TemponestClient:
         # Initialize service clients
         self.agents = AgentsClient(self._client)
         self.scheduler = SchedulerClient(self._client)
+        self.rag = RAGClient(self._client)
+        self.collaboration = CollaborationClient(self._client)
+        self.costs = CostsClient(self._client)
+        self.webhooks = WebhooksClient(self._client)
 
     def close(self) -> None:
         """Close the HTTP client"""
@@ -147,6 +155,10 @@ class AsyncTemponestClient:
         # Initialize async service clients
         self.agents = AsyncAgentsClient(self._client)
         self.scheduler = AsyncSchedulerClient(self._client)
+        self.rag = AsyncRAGClient(self._client)
+        self.collaboration = AsyncCollaborationClient(self._client)
+        self.costs = AsyncCostsClient(self._client)
+        self.webhooks = AsyncWebhooksClient(self._client)
 
     async def close(self) -> None:
         """Close the HTTP client"""

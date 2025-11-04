@@ -227,6 +227,72 @@ class AgentsClient:
                 raise AgentNotFoundError(f"Agent {agent_id} not found")
             raise
 
+    def execute_stream(
+        self,
+        agent_id: str,
+        user_message: str,
+        context: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        Execute an agent with streaming response
+
+        Args:
+            agent_id: Agent ID
+            user_message: User message/prompt
+            context: Additional context
+
+        Yields:
+            Chunks of the agent's response as they arrive
+
+        Raises:
+            AgentNotFoundError: If agent not found
+
+        Example:
+            ```python
+            for chunk in client.agents.execute_stream(agent_id, "Hello!"):
+                print(chunk, end='', flush=True)
+            ```
+        """
+        request = AgentExecuteRequest(
+            user_message=user_message,
+            context=context or {},
+            stream=True,
+        )
+
+        try:
+            import httpx
+            from urllib.parse import urljoin
+
+            url = urljoin(self.client.base_url, f"/agents/{agent_id}/execute")
+            headers = self.client._get_headers()
+
+            with httpx.stream(
+                "POST",
+                url,
+                json=request.model_dump(),
+                headers=headers,
+                timeout=self.client.timeout,
+            ) as response:
+                if response.status_code >= 400:
+                    self.client._handle_error(response)
+
+                for line in response.iter_lines():
+                    if line.startswith("data: "):
+                        data = line[6:]  # Remove "data: " prefix
+                        if data == "[DONE]":
+                            break
+                        try:
+                            import json
+                            chunk_data = json.loads(data)
+                            yield chunk_data.get("content", "")
+                        except json.JSONDecodeError:
+                            continue
+
+        except Exception as e:
+            if "404" in str(e):
+                raise AgentNotFoundError(f"Agent {agent_id} not found")
+            raise
+
     def get_execution(self, execution_id: str) -> AgentExecution:
         """
         Get an execution by ID
@@ -374,6 +440,72 @@ class AsyncAgentsClient:
                 json=request.model_dump()
             )
             return AgentExecution(**response)
+        except Exception as e:
+            if "404" in str(e):
+                raise AgentNotFoundError(f"Agent {agent_id} not found")
+            raise
+
+    async def execute_stream(
+        self,
+        agent_id: str,
+        user_message: str,
+        context: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        Execute an agent with streaming response (async)
+
+        Args:
+            agent_id: Agent ID
+            user_message: User message/prompt
+            context: Additional context
+
+        Yields:
+            Chunks of the agent's response as they arrive
+
+        Raises:
+            AgentNotFoundError: If agent not found
+
+        Example:
+            ```python
+            async for chunk in client.agents.execute_stream(agent_id, "Hello!"):
+                print(chunk, end='', flush=True)
+            ```
+        """
+        request = AgentExecuteRequest(
+            user_message=user_message,
+            context=context or {},
+            stream=True,
+        )
+
+        try:
+            import httpx
+            from urllib.parse import urljoin
+            import json
+
+            url = urljoin(self.client.base_url, f"/agents/{agent_id}/execute")
+            headers = self.client._get_headers()
+
+            async with httpx.AsyncClient(timeout=self.client.timeout) as http_client:
+                async with http_client.stream(
+                    "POST",
+                    url,
+                    json=request.model_dump(),
+                    headers=headers,
+                ) as response:
+                    if response.status_code >= 400:
+                        self.client._handle_error(response)
+
+                    async for line in response.aiter_lines():
+                        if line.startswith("data: "):
+                            data = line[6:]  # Remove "data: " prefix
+                            if data == "[DONE]":
+                                break
+                            try:
+                                chunk_data = json.loads(data)
+                                yield chunk_data.get("content", "")
+                            except json.JSONDecodeError:
+                                continue
+
         except Exception as e:
             if "404" in str(e):
                 raise AgentNotFoundError(f"Agent {agent_id} not found")
