@@ -16,6 +16,7 @@ class AgentRole(str, Enum):
     DEVOPS = "devops"
     DESIGNER = "designer"
     SECURITY_AUDITOR = "security_auditor"
+    UX_RESEARCHER = "ux_researcher"
 
 
 class TaskStatus(str, Enum):
