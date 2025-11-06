@@ -1,0 +1,158 @@
+// SaaS Empire Console Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  type      ProjectType
+  status    ProjectStatus @default(idle)
+  repoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs      Run[]
+
+  @@map("projects")
+}
+
+enum ProjectType {
+  single
+  portfolio
+}
+
+enum ProjectStatus {
+  idle
+  research
+  build
+  qa
+  deploy
+  live
+}
+
+model Run {
+  id         String   @id @default(uuid())
+  projectId  String
+  kind       RunKind
+  step       String
+  status     RunStatus @default(pending)
+  startedAt  DateTime?
+  finishedAt DateTime?
+  logs       String?   @db.Text
+  artifacts  Json?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  approvals Approval[]
+
+  @@index([projectId])
+  @@index([status])
+  @@map("runs")
+}
+
+enum RunKind {
+  wizard
+  build
+  deploy
+  calc
+}
+
+enum RunStatus {
+  pending
+  running
+  success
+  failed
+  cancelled
+}
+
+model Agent {
+  id            String       @id @default(uuid())
+  name          AgentName    @unique
+  status        AgentStatus  @default(healthy)
+  lastHeartbeat DateTime?
+  version       String
+  config        Json         @default("{}")
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@map("agents")
+}
+
+enum AgentName {
+  Overseer
+  Developer
+  Designer
+  UX
+  QA
+  Security
+  DevOps
+}
+
+enum AgentStatus {
+  healthy
+  degraded
+  down
+}
+
+model Approval {
+  id         String         @id @default(uuid())
+  runId      String
+  step       String
+  status     ApprovalStatus @default(pending)
+  comment    String?        @db.Text
+  createdAt  DateTime       @default(now())
+  decidedAt  DateTime?
+  decidedBy  String?
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([status])
+  @@map("approvals")
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  changes_requested
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  role      UserRole @default(collaborator)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+enum UserRole {
+  owner
+  collaborator
+  readonly
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  resource  String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
