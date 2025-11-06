@@ -101,3 +101,6 @@ services/n8n/.n8n/
 !docker/.env.example
 !**/.env.example
 !**/.env.template
+
+# Allow Next.js lib directory
+!apps/console/lib/
