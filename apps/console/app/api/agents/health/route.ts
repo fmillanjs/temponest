@@ -1,42 +1,35 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
-import { withAuth, withPermission, withRateLimit, compose, jsonResponse, errorResponse } from '@/lib/server/api-helpers'
-import { Permission } from '@/lib/permissions'
 
 export const runtime = 'nodejs'
 
-// GET - View agents (requires auth and view permission)
-export const GET = compose(
-  withAuth,
-  withPermission(Permission.AGENT_VIEW),
-  withRateLimit(30, 60000) // 30 requests per minute
-)(async (req: NextRequest) => {
+// GET - View agents
+export async function GET(req: NextRequest) {
   try {
     const agents = await prisma.agent.findMany({
       orderBy: { name: 'asc' },
     })
 
-    return jsonResponse({ agents })
+    return NextResponse.json({ agents })
   } catch (error) {
-    return errorResponse(
-      error instanceof Error ? error.message : 'Unknown error',
-      500
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
     )
   }
-})
+}
 
-// POST - Update agent heartbeat (requires auth and configure permission)
-export const POST = compose(
-  withAuth,
-  withPermission(Permission.AGENT_CONFIGURE),
-  withRateLimit(60, 60000) // 60 requests per minute
-)(async (req: NextRequest) => {
+// POST - Update agent heartbeat
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { name, version, config } = body
 
     if (!name || !version) {
-      return errorResponse('Name and version are required', 400)
+      return NextResponse.json(
+        { error: 'Name and version are required' },
+        { status: 400 }
+      )
     }
 
     const agent = await prisma.agent.upsert({
@@ -55,11 +48,11 @@ export const POST = compose(
       },
     })
 
-    return jsonResponse({ agent })
+    return NextResponse.json({ agent })
   } catch (error) {
-    return errorResponse(
-      error instanceof Error ? error.message : 'Unknown error',
-      500
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
     )
   }
-})
+}

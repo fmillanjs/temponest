@@ -33,10 +33,11 @@ const statusColors = {
 export default async function ProjectDetailPage({
   params,
 }: {
-  params: { slug: string }
+  params: Promise<{ slug: string }>
 }) {
+  const { slug } = await params
   const project = await prisma.project.findUnique({
-    where: { slug: params.slug },
+    where: { slug },
     include: {
       runs: {
         orderBy: { createdAt: 'desc' },

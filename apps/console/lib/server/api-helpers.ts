@@ -142,8 +142,8 @@ export function withRateLimit(
 /**
  * Combine multiple middleware wrappers
  */
-export function compose(...middlewares: Function[]) {
-  return (handler: Function) => {
+export function compose(...middlewares: Array<(handler: any) => any>) {
+  return (handler: any) => {
     return middlewares.reduceRight(
       (acc, middleware) => middleware(acc),
       handler
