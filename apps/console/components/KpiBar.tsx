@@ -1,14 +1,37 @@
 import { TrendingUp, Zap, CheckCircle, Clock, DollarSign } from 'lucide-react'
+import { prisma } from '@/lib/db/client'
 
-const kpis = [
-  { label: 'Active Projects', value: '12', icon: Zap, change: '+3', trend: 'up' },
-  { label: 'Build Runs Today', value: '47', icon: CheckCircle, change: '+12', trend: 'up' },
-  { label: 'Agent Uptime', value: '99.2%', icon: TrendingUp, change: '-0.1%', trend: 'down' },
-  { label: 'Queue Depth', value: '8', icon: Clock, change: '-4', trend: 'up' },
-  { label: 'Est. MRR', value: '$18.4k', icon: DollarSign, change: '+$2.1k', trend: 'up' },
-]
+export async function KpiBar() {
+  // Fetch real-time metrics from database
+  const [
+    totalProjects,
+    activeProjects,
+    runsToday,
+    queueDepth,
+    healthyAgents,
+    totalAgents
+  ] = await Promise.all([
+    prisma.project.count(),
+    prisma.project.count({ where: { status: { notIn: ['idle'] } } }),
+    prisma.run.count({
+      where: {
+        createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) }
+      }
+    }),
+    prisma.run.count({ where: { status: 'pending' } }),
+    prisma.agent.count({ where: { status: 'healthy' } }),
+    prisma.agent.count()
+  ])
 
-export function KpiBar() {
+  const uptime = totalAgents > 0 ? ((healthyAgents / totalAgents) * 100).toFixed(1) : '0.0'
+
+  const kpis = [
+    { label: 'Active Projects', value: activeProjects.toString(), icon: Zap, change: '', trend: 'up' as const },
+    { label: 'Build Runs Today', value: runsToday.toString(), icon: CheckCircle, change: '', trend: 'up' as const },
+    { label: 'Agent Uptime', value: `${uptime}%`, icon: TrendingUp, change: '', trend: 'up' as const },
+    { label: 'Queue Depth', value: queueDepth.toString(), icon: Clock, change: '', trend: 'up' as const },
+    { label: 'Total Projects', value: totalProjects.toString(), icon: DollarSign, change: '', trend: 'up' as const },
+  ]
   return (
     <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
       {kpis.map((kpi) => (

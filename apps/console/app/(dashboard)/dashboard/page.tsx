@@ -2,18 +2,18 @@ import { KpiBar } from '@/components/KpiBar'
 import { AgentStatusCard } from '@/components/AgentStatusCard'
 import { QuickActions } from '@/components/QuickActions'
 import { RecentActivity } from '@/components/RecentActivity'
+import { prisma } from '@/lib/db/client'
+import { formatDistanceToNow } from 'date-fns'
 
-const agents = [
-  { name: 'Overseer', status: 'healthy' as const, heartbeat: '2m', version: '1.2.3' },
-  { name: 'Developer', status: 'healthy' as const, heartbeat: '2m', version: '1.4.0' },
-  { name: 'Designer', status: 'healthy' as const, heartbeat: '3m', version: '0.9.9' },
-  { name: 'UX', status: 'healthy' as const, heartbeat: '1m', version: '0.4.2' },
-  { name: 'QA', status: 'degraded' as const, heartbeat: '6m', version: '0.8.1' },
-  { name: 'Security', status: 'healthy' as const, heartbeat: '4m', version: '0.5.0' },
-  { name: 'DevOps', status: 'healthy' as const, heartbeat: '2m', version: '1.1.0' },
-]
+function getHeartbeat(lastHeartbeat: Date | null) {
+  if (!lastHeartbeat) return 'never'
+  return formatDistanceToNow(lastHeartbeat, { addSuffix: false })
+}
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const agents = await prisma.agent.findMany({
+    orderBy: { name: 'asc' }
+  })
   return (
     <div className="space-y-6">
       <div>
@@ -28,10 +28,10 @@ export default function DashboardPage() {
         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
           {agents.map((agent) => (
             <AgentStatusCard
-              key={agent.name}
+              key={agent.id}
               name={agent.name}
               status={agent.status}
-              heartbeat={agent.heartbeat}
+              heartbeat={getHeartbeat(agent.lastHeartbeat)}
               version={agent.version}
             />
           ))}
