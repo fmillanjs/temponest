@@ -85,7 +85,7 @@ export const ApprovalSchema = z.object({
 
 // API request schemas
 export const FinancialRunRequestSchema = z.object({
-  model: z.enum(['formbuilder', 'analytics', 'crm']),
+  model: z.enum(['formbuilder', 'analytics', 'crm', 'scheduler', 'emailbuilder']),
   args: z.array(z.string()).optional(),
   workdir: z.string().default('/home/doctor/temponest'),
 })
