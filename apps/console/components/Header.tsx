@@ -1,6 +1,7 @@
 'use client'
 
-import { Search, Bell, User } from 'lucide-react'
+import { Search, Bell } from 'lucide-react'
+import { UserMenu } from './UserMenu'
 
 export function Header() {
   return (
@@ -22,10 +23,7 @@ export function Header() {
         <button className="rounded-xl p-2 text-base-600 hover:bg-base-100">
           <Bell className="h-5 w-5" />
         </button>
-        <button className="flex items-center gap-2 rounded-xl border border-base-200 bg-white px-3 py-2 text-sm hover:bg-base-50">
-          <User className="h-4 w-4" />
-          <span>Admin</span>
-        </button>
+        <UserMenu />
       </div>
     </header>
   )
