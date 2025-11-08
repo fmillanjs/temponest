@@ -162,13 +162,15 @@ class RAGMemory:
             batch = documents[i:i + batch_size]
             points = []
 
-            for doc in batch:
+            for idx, doc in enumerate(batch):
                 # Generate embedding
                 embedding = await self.embed_text(doc["content"])
 
-                # Create point
+                # Create point - generate ID if not provided
+                point_id = doc.get("id") if doc.get("id") is not None else (i + idx)
+
                 point = PointStruct(
-                    id=doc.get("id", None),  # Use provided ID or let Qdrant generate
+                    id=point_id,
                     vector=embedding,
                     payload={
                         "content": doc["content"],

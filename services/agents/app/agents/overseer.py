@@ -303,7 +303,7 @@ Content: {cit['content'][:300]}...
                 in_next_steps = True
                 continue
 
-            if in_next_steps and (line.startswith("-") or line.startswith("*") or line[0].isdigit()):
+            if in_next_steps and line and (line.startswith("-") or line.startswith("*") or line[0].isdigit()):
                 steps.append(line.lstrip("-*0123456789. "))
 
         return steps
