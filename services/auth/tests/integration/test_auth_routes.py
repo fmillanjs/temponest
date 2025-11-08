@@ -181,7 +181,7 @@ class TestLoginEndpoint:
             """
             SELECT * FROM audit_log
             WHERE user_id = $1 AND action = 'login'
-            ORDER BY created_at DESC
+            ORDER BY timestamp DESC
             LIMIT 1
             """,
             test_user["id"]

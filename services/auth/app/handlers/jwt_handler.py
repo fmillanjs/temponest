@@ -5,7 +5,7 @@ JWT token generation and validation.
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
-from uuid import UUID
+from uuid import UUID, uuid4
 from app.settings import settings
 
 
@@ -34,6 +34,7 @@ class JWTHandler:
             "is_superuser": is_superuser,
             "exp": expire,
             "iat": datetime.utcnow(),
+            "jti": str(uuid4()),  # Unique token identifier
             "type": "access"
         }
 
@@ -54,6 +55,7 @@ class JWTHandler:
             "tenant_id": str(tenant_id),
             "exp": expire,
             "iat": datetime.utcnow(),
+            "jti": str(uuid4()),  # Unique token identifier
             "type": "refresh"
         }
 

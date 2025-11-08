@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 class TestCompleteUserJourney:
     """Test complete user lifecycle from registration to authenticated access"""
 
-    async def test_complete_registration_to_access_flow(self, client: AsyncClient):
+    async def test_complete_registration_to_access_flow(self, client: AsyncClient, clean_database):
         """
         Test complete flow: Register -> Login -> Use Token -> Refresh Token
         """
@@ -299,7 +299,7 @@ class TestSecurityFlows:
 class TestAuditLogging:
     """Test that authentication events are logged"""
 
-    async def test_registration_creates_audit_log(self, client: AsyncClient):
+    async def test_registration_creates_audit_log(self, client: AsyncClient, clean_database):
         """Test that user registration is logged"""
         from app.database import db
 
@@ -321,7 +321,7 @@ class TestAuditLogging:
             """
             SELECT * FROM audit_log
             WHERE user_id = $1 AND action = 'register'
-            ORDER BY created_at DESC
+            ORDER BY timestamp DESC
             LIMIT 1
             """,
             user_data["id"]
@@ -351,7 +351,7 @@ class TestAuditLogging:
             """
             SELECT * FROM audit_log
             WHERE user_id = $1 AND action = 'login'
-            ORDER BY created_at DESC
+            ORDER BY timestamp DESC
             LIMIT 1
             """,
             test_user["id"]
@@ -381,7 +381,7 @@ class TestAuditLogging:
             """
             SELECT * FROM audit_log
             WHERE user_id = $1 AND action = 'api_key_create'
-            ORDER BY created_at DESC
+            ORDER BY timestamp DESC
             LIMIT 1
             """,
             test_user["id"]

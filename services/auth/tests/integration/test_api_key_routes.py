@@ -124,7 +124,7 @@ class TestCreateAPIKeyEndpoint:
             """
             SELECT * FROM audit_log
             WHERE user_id = $1 AND action = 'api_key_create'
-            ORDER BY created_at DESC
+            ORDER BY timestamp DESC
             LIMIT 1
             """,
             str(test_user["id"])
@@ -330,7 +330,7 @@ class TestRevokeAPIKeyEndpoint:
             """
             SELECT * FROM audit_log
             WHERE user_id = $1 AND action = 'api_key_revoke'
-            ORDER BY created_at DESC
+            ORDER BY timestamp DESC
             LIMIT 1
             """,
             str(test_user["id"])
