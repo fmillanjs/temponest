@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 from datetime import datetime, timedelta
 
 # Set test environment variables before importing app
-os.environ["DATABASE_URL"] = os.getenv("TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:5434/test_agentic")
+os.environ["DATABASE_URL"] = os.getenv("TEST_DATABASE_URL", "postgresql://postgres:agentic_postgres_2024@localhost:5434/agentic")
 os.environ["REDIS_URL"] = os.getenv("TEST_REDIS_URL", "redis://localhost:6379/1")
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing-only-min-32-characters-long"
 os.environ["JWT_ACCESS_TOKEN_EXPIRE_MINUTES"] = "60"
@@ -85,7 +85,7 @@ async def clean_database(db_connection):
 # ============================================================
 
 @pytest.fixture
-async def client() -> AsyncGenerator[AsyncClient, None]:
+async def client(db_connection) -> AsyncGenerator[AsyncClient, None]:
     """Create async HTTP client for testing"""
     async with AsyncClient(app=app, base_url="http://test") as ac:
         yield ac
