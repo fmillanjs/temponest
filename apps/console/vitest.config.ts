@@ -8,6 +8,12 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: true,
     setupFiles: './tests/setup.ts',
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/e2e/**',
+      '**/.next/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -17,6 +23,7 @@ export default defineConfig({
         '*.config.*',
         '.next/',
         'prisma/',
+        'e2e/',
       ]
     }
   },
