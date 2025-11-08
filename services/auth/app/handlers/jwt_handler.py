@@ -2,7 +2,7 @@
 JWT token generation and validation.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from uuid import UUID, uuid4
@@ -23,7 +23,8 @@ class JWTHandler:
     ) -> str:
         """Create JWT access token"""
         expires_delta = timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-        expire = datetime.utcnow() + expires_delta
+        now = datetime.now(timezone.utc)
+        expire = now + expires_delta
 
         payload = {
             "sub": str(user_id),
@@ -33,7 +34,7 @@ class JWTHandler:
             "permissions": permissions,
             "is_superuser": is_superuser,
             "exp": expire,
-            "iat": datetime.utcnow(),
+            "iat": now,
             "jti": str(uuid4()),  # Unique token identifier
             "type": "access"
         }
@@ -48,13 +49,14 @@ class JWTHandler:
     def create_refresh_token(user_id: UUID, tenant_id: UUID) -> str:
         """Create JWT refresh token"""
         expires_delta = timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
-        expire = datetime.utcnow() + expires_delta
+        now = datetime.now(timezone.utc)
+        expire = now + expires_delta
 
         payload = {
             "sub": str(user_id),
             "tenant_id": str(tenant_id),
             "exp": expire,
-            "iat": datetime.utcnow(),
+            "iat": now,
             "jti": str(uuid4()),  # Unique token identifier
             "type": "refresh"
         }

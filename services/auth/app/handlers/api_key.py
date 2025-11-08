@@ -109,7 +109,14 @@ class APIKeyHandler:
             row["id"]
         )
 
-        return dict(row)
+        # Convert UUIDs to strings for consistent API responses
+        result = dict(row)
+        result["id"] = str(result["id"])
+        result["tenant_id"] = str(result["tenant_id"])
+        if result["user_id"]:
+            result["user_id"] = str(result["user_id"])
+
+        return result
 
     @staticmethod
     async def revoke_api_key(api_key_id: UUID):

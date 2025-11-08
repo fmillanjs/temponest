@@ -2,7 +2,7 @@
 Pydantic models for requests and responses.
 """
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
@@ -88,6 +88,8 @@ class APIKeyCreateRequest(BaseModel):
 
 class APIKeyResponse(BaseModel):
     """API key response"""
+    model_config = ConfigDict(exclude_none=True)
+
     id: UUID
     key: Optional[str] = None  # Only returned on creation
     key_prefix: str

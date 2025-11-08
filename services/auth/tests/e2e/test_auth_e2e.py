@@ -6,7 +6,7 @@ Tests full user journeys from registration through authentication and authorizat
 
 import pytest
 from httpx import AsyncClient
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 @pytest.mark.e2e
@@ -239,8 +239,8 @@ class TestSecurityFlows:
 
         # Step 3: Token should have expiration
         assert "exp" in payload
-        exp_time = datetime.fromtimestamp(payload["exp"])
-        now = datetime.utcnow()
+        exp_time = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+        now = datetime.now(timezone.utc)
         assert exp_time > now  # Token not yet expired
 
         # Step 4: Use refresh token before access token expires

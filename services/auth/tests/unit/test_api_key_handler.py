@@ -144,8 +144,8 @@ class TestAPIKeyDatabaseOperations:
         result = await APIKeyHandler.validate_api_key(test_api_key["key"])
 
         assert result is not None
-        assert result["id"] == test_api_key["id"]
-        assert result["tenant_id"] == test_api_key["tenant_id"]
+        assert result["id"] == str(test_api_key["id"])
+        assert result["tenant_id"] == str(test_api_key["tenant_id"])
         assert result["scopes"] == ["agents:read", "workflows:create"]
 
     async def test_validate_api_key_invalid(self):

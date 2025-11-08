@@ -71,7 +71,7 @@ async def create_api_key(
     )
 
 
-@router.get("", response_model=List[APIKeyResponse])
+@router.get("", response_model=List[APIKeyResponse], response_model_exclude_none=True)
 @limiter.limit("100/hour")  # Higher limit for read operations
 async def list_api_keys(
     request: Request,

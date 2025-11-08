@@ -55,8 +55,8 @@ async def get_current_user(
                 permissions = api_key_data["scopes"]
 
             return AuthContext(
-                user_id=api_key_data["user_id"] or "api-key",
-                tenant_id=api_key_data["tenant_id"],
+                user_id=str(api_key_data["user_id"]) if api_key_data["user_id"] else "api-key",
+                tenant_id=str(api_key_data["tenant_id"]),
                 email=api_key_data.get("user_email", "api-key@system"),
                 roles=["api-key"],
                 permissions=permissions,
