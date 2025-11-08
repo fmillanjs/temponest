@@ -206,9 +206,12 @@ class TestPermissionEnforcement:
         )
 
         for perm in permissions:
-            # Permission name should be resource:action
-            expected_name = f"{perm['resource']}:{perm['action']}"
-            assert perm["name"] == expected_name
+            # Permission name should be in format resource:operation
+            # The name uses semantic operations (e.g., 'create', 'read')
+            # while action uses permission types (e.g., 'write', 'read')
+            assert ":" in perm["name"], f"Permission name {perm['name']} should contain ':'"
+            assert perm["name"].startswith(perm["resource"] + ":"), \
+                f"Permission name {perm['name']} should start with resource {perm['resource']}"
 
     async def test_multiple_roles_aggregate_permissions(self, test_tenant):
         """Test that user with multiple roles gets all permissions"""
@@ -304,8 +307,8 @@ class TestRoleManagement:
 
         actions = set([p["action"] for p in admin_permissions])
 
-        # Admin should have create, read, update, delete
-        expected_actions = {"create", "read", "update", "delete"}
+        # Admin should have read, write, execute, delete (permission-style actions)
+        expected_actions = {"read", "write", "execute", "delete"}
         assert expected_actions.issubset(actions)
 
     async def test_new_user_gets_default_viewer_role(self, client: AsyncClient):

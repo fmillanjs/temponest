@@ -314,7 +314,7 @@ class TestRegisterEndpoint:
         assert tenant is not None
         assert tenant["is_active"] is True
 
-    async def test_register_assigns_viewer_role(self, client: AsyncClient):
+    async def test_register_assigns_viewer_role(self, client: AsyncClient, clean_database):
         """Test that registration assigns viewer role"""
         from app.database import db
 
@@ -343,16 +343,16 @@ class TestRegisterEndpoint:
 
         assert role["name"] == "viewer"
 
-    async def test_register_creates_audit_log(self, client: AsyncClient):
+    async def test_register_creates_audit_log(self, client: AsyncClient, clean_database):
         """Test that registration creates audit log entry"""
         from app.database import db
 
         response = await client.post(
             "/auth/register",
             json={
-                "email": "newuser@example.com",
+                "email": "newuser2@example.com",
                 "password": "SecurePass123!",
-                "full_name": "New User"
+                "full_name": "New User 2"
             }
         )
 
