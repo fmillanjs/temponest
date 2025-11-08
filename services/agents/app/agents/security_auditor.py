@@ -594,7 +594,7 @@ Security Checklist:
             if "load_dotenv" in code or "environ.get" in code:
                 # Good - using environment variables
                 pass
-            elif any(re.search(r'password\s*=\s*["\']', code, re.IGNORECASE)):
+            elif re.search(r'password\s*=\s*["\']', code, re.IGNORECASE):
                 findings.append({
                     "severity": "MEDIUM",
                     "type": "Missing environment variable usage",
