@@ -199,7 +199,7 @@ class TestPermissionEnforcement:
         assert "is_superuser" in payload
         assert payload["is_superuser"] is True
 
-    async def test_permission_naming_convention(self):
+    async def test_permission_naming_convention(self, clean_database):
         """Test that permissions follow resource:action naming convention"""
         permissions = await db.fetch(
             "SELECT name, resource, action FROM permissions"
@@ -290,7 +290,7 @@ class TestRoleManagement:
         # Viewer should NOT have 'delete' permissions
         assert "delete" not in actions
 
-    async def test_admin_role_has_all_permissions(self):
+    async def test_admin_role_has_all_permissions(self, clean_database):
         """Test that admin role has comprehensive permissions"""
         admin_permissions = await db.fetch(
             """
