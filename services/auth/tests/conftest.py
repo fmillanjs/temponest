@@ -49,42 +49,34 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture(scope="session")
-async def setup_test_database(request):
-    """Setup test database before integration tests only"""
-    # Only run for integration tests
-    if "integration" not in request.keywords and not any("integration" in str(marker) for marker in request.node.iter_markers()):
-        yield
-        return
-
-    await db.connect()
-
-    # Clean all tables before tests
-    await db.execute("TRUNCATE TABLE audit_log CASCADE")
-    await db.execute("TRUNCATE TABLE api_keys CASCADE")
-    await db.execute("TRUNCATE TABLE user_roles CASCADE")
-    await db.execute("TRUNCATE TABLE users CASCADE")
-    await db.execute("TRUNCATE TABLE tenants CASCADE")
-
+async def db_connection():
+    """Setup test database connection for the session"""
+    if not db.pool:
+        await db.connect()
     yield
-
-    # Cleanup after all tests
     await db.disconnect()
 
 
 @pytest.fixture
-async def clean_database(request):
-    """Clean database before each integration test"""
-    # Only run for integration tests
-    if "integration" not in str(request.fspath):
-        yield
-        return
-
-    await db.connect() if not db.pool else None
+async def clean_database(db_connection):
+    """Clean database and rate limits before each integration/e2e test"""
+    # Clean all tables before test
     await db.execute("TRUNCATE TABLE audit_log CASCADE")
     await db.execute("TRUNCATE TABLE api_keys CASCADE")
     await db.execute("TRUNCATE TABLE user_roles CASCADE")
     await db.execute("TRUNCATE TABLE users CASCADE")
     await db.execute("TRUNCATE TABLE tenants CASCADE")
+
+    # Clear Redis rate limits
+    import redis.asyncio as redis
+    from app.settings import settings
+    try:
+        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        await redis_client.flushdb()
+        await redis_client.close()
+    except:
+        pass  # Ignore if Redis not available
+
     yield
 
 
@@ -114,7 +106,7 @@ def test_tenant_data():
 
 
 @pytest.fixture
-async def test_tenant(test_tenant_data):
+async def test_tenant(test_tenant_data, clean_database):
     """Create a test tenant"""
     tenant_id = await db.fetchval(
         """
