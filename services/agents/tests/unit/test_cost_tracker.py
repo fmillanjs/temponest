@@ -17,9 +17,14 @@ class TestCostTracker:
     @pytest.fixture
     def mock_db_pool(self):
         """Mock database pool"""
-        pool = AsyncMock()
+        pool = MagicMock()
         conn = AsyncMock()
-        pool.acquire.return_value.__aenter__.return_value = conn
+
+        # Create a proper async context manager
+        async def mock_acquire():
+            return conn
+
+        pool.acquire = MagicMock(return_value=AsyncMock(__aenter__=AsyncMock(return_value=conn), __aexit__=AsyncMock(return_value=None)))
         return pool, conn
 
     @pytest.fixture
