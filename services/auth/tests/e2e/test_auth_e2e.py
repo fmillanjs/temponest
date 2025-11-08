@@ -131,7 +131,7 @@ class TestAPIKeyWorkflow:
         """
         # Step 1: Create API key using authenticated endpoint
         create_response = await client.post(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": f"Bearer {test_access_token}"},
             json={
                 "name": "E2E Test Key",
@@ -158,7 +158,7 @@ class TestAPIKeyWorkflow:
 
         # Step 3: List API keys
         list_response = await client.get(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": f"Bearer {test_access_token}"}
         )
 
@@ -366,7 +366,7 @@ class TestAuditLogging:
 
         # Create API key
         response = await client.post(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": f"Bearer {test_access_token}"},
             json={
                 "name": "Audit Test Key",

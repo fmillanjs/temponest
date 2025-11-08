@@ -16,7 +16,7 @@ class TestCreateAPIKeyEndpoint:
     async def test_create_api_key_success(self, client: AsyncClient, test_access_token):
         """Test successful API key creation"""
         response = await client.post(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": f"Bearer {test_access_token}"},
             json={
                 "name": "Test API Key",
@@ -38,7 +38,7 @@ class TestCreateAPIKeyEndpoint:
     async def test_create_api_key_no_expiry(self, client: AsyncClient, test_access_token):
         """Test creating API key without expiration"""
         response = await client.post(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": f"Bearer {test_access_token}"},
             json={
                 "name": "Never Expires",
@@ -54,7 +54,7 @@ class TestCreateAPIKeyEndpoint:
     async def test_create_api_key_no_scopes(self, client: AsyncClient, test_access_token):
         """Test creating API key with empty scopes"""
         response = await client.post(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": f"Bearer {test_access_token}"},
             json={
                 "name": "No Scopes",
@@ -70,7 +70,7 @@ class TestCreateAPIKeyEndpoint:
     async def test_create_api_key_unauthorized(self, client: AsyncClient):
         """Test API key creation without authentication"""
         response = await client.post(
-            "/api-keys/",
+            "/api-keys",
             json={
                 "name": "Test Key",
                 "scopes": ["agents:read"]
@@ -82,7 +82,7 @@ class TestCreateAPIKeyEndpoint:
     async def test_create_api_key_invalid_token(self, client: AsyncClient):
         """Test API key creation with invalid token"""
         response = await client.post(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": "Bearer invalid.token.here"},
             json={
                 "name": "Test Key",
@@ -95,7 +95,7 @@ class TestCreateAPIKeyEndpoint:
     async def test_create_api_key_missing_name(self, client: AsyncClient, test_access_token):
         """Test API key creation without name"""
         response = await client.post(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": f"Bearer {test_access_token}"},
             json={
                 "scopes": ["agents:read"]
@@ -109,7 +109,7 @@ class TestCreateAPIKeyEndpoint:
         from app.database import db
 
         response = await client.post(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": f"Bearer {test_access_token}"},
             json={
                 "name": "Audit Test Key",
@@ -141,7 +141,7 @@ class TestListAPIKeysEndpoint:
     async def test_list_api_keys_success(self, client: AsyncClient, test_access_token, test_api_key):
         """Test listing API keys"""
         response = await client.get(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": f"Bearer {test_access_token}"}
         )
 
@@ -159,7 +159,7 @@ class TestListAPIKeysEndpoint:
     async def test_list_api_keys_empty(self, client: AsyncClient, test_access_token):
         """Test listing API keys when none exist"""
         response = await client.get(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": f"Bearer {test_access_token}"}
         )
 
@@ -170,7 +170,7 @@ class TestListAPIKeysEndpoint:
 
     async def test_list_api_keys_unauthorized(self, client: AsyncClient):
         """Test listing API keys without authentication"""
-        response = await client.get("/api-keys/")
+        response = await client.get("/api-keys")
 
         assert response.status_code == 401
 
@@ -215,7 +215,7 @@ class TestListAPIKeysEndpoint:
 
         # List keys for user 2 (should be empty)
         response = await client.get(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": f"Bearer {token2}"}
         )
 
@@ -367,7 +367,7 @@ class TestAPIKeyAuthentication:
         """Test using API key for authentication"""
         # Try to list API keys using API key auth
         response = await client.get(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": f"Bearer {test_api_key['key']}"}
         )
 
@@ -381,7 +381,7 @@ class TestAPIKeyAuthentication:
         fake_key = f"{settings.API_KEY_PREFIX}" + "0" * 64
 
         response = await client.get(
-            "/api-keys/",
+            "/api-keys",
             headers={"Authorization": f"Bearer {fake_key}"}
         )
 
