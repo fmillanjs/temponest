@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from uuid import UUID
 
-from auth_client import AuthContext
-from auth_middleware import require_permission, require_any_permission
-from webhooks.models import (
+from app.auth_client import AuthContext
+from app.auth_middleware import require_permission, require_any_permission
+from app.webhooks.models import (
     WebhookCreate,
     WebhookUpdate,
     WebhookResponse,
@@ -17,7 +17,7 @@ from webhooks.models import (
     WebhookHealthResponse,
     EventType
 )
-from webhooks.webhook_manager import WebhookManager
+from app.webhooks.webhook_manager import WebhookManager
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 

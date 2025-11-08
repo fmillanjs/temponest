@@ -5,7 +5,7 @@ Authentication middleware for agent service.
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, List
-from auth_client import AuthClient, AuthContext
+from app.auth_client import AuthClient, AuthContext
 
 
 # Security scheme

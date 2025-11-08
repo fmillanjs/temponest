@@ -4,9 +4,9 @@ Agent Factory - Creates agents based on configuration.
 Supports both CrewAI-based agents (v1) and direct LLM agents (v2).
 """
 
-from memory.rag import RAGMemory
-from memory.langfuse_tracer import LangfuseTracer
-from settings import settings
+from app.memory.rag import RAGMemory
+from app.memory.langfuse_tracer import LangfuseTracer
+from app.settings import settings
 
 from .overseer import OverseerAgent
 from .developer import DeveloperAgent

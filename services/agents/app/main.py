@@ -17,23 +17,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import tiktoken
 
-from settings import settings
-from agents.factory import AgentFactory
-from memory.rag import RAGMemory
-from memory.langfuse_tracer import LangfuseTracer
-from departments.manager import DepartmentManager
-from routers import departments as departments_router
-from auth_client import AuthClient, AuthContext
-from auth_middleware import (
+from app.settings import settings
+from app.agents.factory import AgentFactory
+from app.memory.rag import RAGMemory
+from app.memory.langfuse_tracer import LangfuseTracer
+from app.departments.manager import DepartmentManager
+from app.routers import departments as departments_router
+from app.auth_client import AuthClient, AuthContext
+from app.auth_middleware import (
     set_auth_client,
     get_current_user,
     require_permission,
     require_any_permission
 )
-from cost.calculator import CostCalculator
-from cost.tracker import CostTracker
-from webhooks import EventDispatcher, WebhookManager, EventType
-from routers import webhooks as webhooks_router
+from app.cost.calculator import CostCalculator
+from app.cost.tracker import CostTracker
+from app.webhooks import EventDispatcher, WebhookManager, EventType
+from app.routers import webhooks as webhooks_router
 
 
 # Request/Response Models
@@ -101,7 +101,7 @@ async def update_metrics_periodically():
     while True:
         try:
             # Update service health metrics
-            from metrics import MetricsRecorder, agent_service_health, db_pool_size
+            from app.metrics import MetricsRecorder, agent_service_health, db_pool_size
 
             if rag_memory:
                 MetricsRecorder.update_service_health("qdrant", rag_memory.is_healthy())
@@ -280,8 +280,8 @@ async def lifespan(app: FastAPI):
 
     # Initialize Collaboration Manager
     print("\n🤝 Initializing Collaboration Framework...")
-    from collaboration.manager import CollaborationManager
-    from collaboration.models import AgentRole
+    from app.collaboration.manager import CollaborationManager
+    from app.collaboration.models import AgentRole
 
     agents_dict = {
         AgentRole.OVERSEER: overseer_agent,
@@ -349,12 +349,12 @@ app.add_middleware(
 # Include routers
 app.include_router(departments_router.router)
 app.include_router(webhooks_router.router)
-from routers import collaboration as collaboration_router
+from app.routers import collaboration as collaboration_router
 app.include_router(collaboration_router.router)
 
 # Prometheus metrics
 from prometheus_client import make_asgi_app
-from metrics import MetricsRecorder, service_info
+from app.metrics import MetricsRecorder, service_info
 
 # Initialize service info
 service_info.info({
@@ -470,13 +470,13 @@ async def health_check():
     }
 
     # Update Prometheus metrics
-    from metrics import MetricsRecorder, db_pool_size
+    from app.metrics import MetricsRecorder, db_pool_size
     MetricsRecorder.update_service_health("qdrant", qdrant_healthy)
     MetricsRecorder.update_service_health("langfuse", langfuse_healthy)
     MetricsRecorder.update_service_health("database", database_healthy)
 
     # Set agent service health (1 if overall healthy)
-    from metrics import agent_service_health
+    from app.metrics import agent_service_health
     agent_service_health.set(1.0 if all(v in ["healthy", "ready"] for v in services.values()) else 0.0)
 
     # Update database pool metrics

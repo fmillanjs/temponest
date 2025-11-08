@@ -18,8 +18,8 @@ import ast
 from crewai import Agent, Task, Crew
 from crewai.tools import tool
 
-from memory.rag import RAGMemory
-from memory.langfuse_tracer import LangfuseTracer
+from app.memory.rag import RAGMemory
+from app.memory.langfuse_tracer import LangfuseTracer
 
 
 class QATesterAgent:

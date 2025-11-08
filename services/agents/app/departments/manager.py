@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
-from llm.unified_client import UnifiedLLMClient
-from memory.rag import RAGMemory
-from memory.langfuse_tracer import LangfuseTracer
+from app.llm.unified_client import UnifiedLLMClient
+from app.memory.rag import RAGMemory
+from app.memory.langfuse_tracer import LangfuseTracer
 
 
 @dataclass

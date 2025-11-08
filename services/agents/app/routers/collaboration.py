@@ -5,13 +5,13 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
 from uuid import UUID
 
-from collaboration.models import (
+from app.collaboration.models import (
     CollaborationRequest,
     CollaborationResponse,
     CollaborationWorkspace,
     AgentRole
 )
-from collaboration.manager import CollaborationManager
+from app.collaboration.manager import CollaborationManager
 
 
 router = APIRouter(prefix="/collaboration", tags=["collaboration"])
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/collaboration", tags=["collaboration"])
 # Dependency injection
 def get_collaboration_manager() -> CollaborationManager:
     """Get collaboration manager from app state"""
-    from main import collaboration_manager
+    from app.main import collaboration_manager
     return collaboration_manager
 
 

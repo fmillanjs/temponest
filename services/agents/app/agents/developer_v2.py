@@ -10,10 +10,10 @@ import time
 import json
 import re
 
-from llm.unified_client import UnifiedLLMClient
-from memory.rag import RAGMemory
-from memory.langfuse_tracer import LangfuseTracer
-from settings import settings
+from app.llm.unified_client import UnifiedLLMClient
+from app.memory.rag import RAGMemory
+from app.memory.langfuse_tracer import LangfuseTracer
+from app.settings import settings
 
 
 class DeveloperAgentV2:
