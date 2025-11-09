@@ -681,7 +681,7 @@ Implementation:
       <button
         aria-label="Close modal"
         className="p-1 hover:bg-neutral-100 rounded-md"
-        onClick={handleClose}
+        onClick={{handleClose}}
       >
         <CloseIcon />
       </button>
@@ -892,11 +892,11 @@ Provide production-ready, enterprise-grade design specifications.
     def _extract_section(self, result: str, pattern: str) -> str:
         """Extract specific section from result"""
         # Simple extraction - would be more sophisticated in production
-        match = re.search(f"(?i){pattern}[:\n]+(.*?)(?:\n\n|\Z)", result, re.DOTALL)
+        match = re.search(f"(?i)(?:{pattern})[:\n]+(.*?)(?:\n\n|\Z)", result, re.DOTALL)
         return match.group(1).strip() if match else ""
 
     def _extract_code(self, result: str, language: str) -> str:
         """Extract code blocks from result"""
-        pattern = f"```{language}\n(.*?)\n```"
+        pattern = f"```(?:{language})\n(.*?)\n```"
         match = re.search(pattern, result, re.DOTALL | re.IGNORECASE)
         return match.group(1).strip() if match else ""
