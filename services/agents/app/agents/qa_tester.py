@@ -469,5 +469,5 @@ Citations:
         """Extract fixture names from test code"""
         fixtures = []
         fixture_pattern = r'@pytest\.fixture.*?def (\w+)'
-        matches = re.findall(fixture_pattern, test_code)
+        matches = re.findall(fixture_pattern, test_code, re.DOTALL)
         return matches
