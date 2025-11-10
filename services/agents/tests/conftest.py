@@ -125,10 +125,50 @@ async def clean_database(request, db_pool):
 # ============================================================
 
 @pytest.fixture
-async def client() -> AsyncGenerator[AsyncClient, None]:
-    """Create async HTTP client for testing"""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        yield ac
+async def client(request) -> AsyncGenerator[AsyncClient, None]:
+    """Create async HTTP client for testing with auth mocking for integration tests"""
+    # Mock auth client for integration tests
+    if "integration" in str(request.fspath) or "e2e" in str(request.fspath):
+        from app.auth_client import AuthClient, AuthContext
+        from app import auth_middleware
+        from uuid import uuid4
+
+        # Create mock auth context
+        mock_auth_context = AuthContext(
+            user_id=str(uuid4()),
+            tenant_id=str(uuid4()),
+            email="test@example.com",
+            roles=["admin"],
+            permissions=[
+                "agents:read",
+                "agents:write",
+                "agents:execute",
+                "departments:read",
+                "workflows:read",
+                "workflows:create",
+                "webhooks:read",
+                "webhooks:write"
+            ],
+            is_superuser=False
+        )
+
+        # Create mock auth client
+        mock_auth_client = AsyncMock(spec=AuthClient)
+        mock_auth_client.verify_token.return_value = mock_auth_context
+        mock_auth_client.check_permission.return_value = True
+
+        # Set the global auth client
+        auth_middleware._auth_client = mock_auth_client
+
+        async with AsyncClient(app=app, base_url="http://test") as ac:
+            yield ac
+
+        # Cleanup
+        auth_middleware._auth_client = None
+    else:
+        # For unit tests, just create a simple client
+        async with AsyncClient(app=app, base_url="http://test") as ac:
+            yield ac
 
 
 # ============================================================
