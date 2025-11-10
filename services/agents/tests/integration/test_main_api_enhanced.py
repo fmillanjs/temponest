@@ -619,7 +619,9 @@ class TestMainAPIEnhanced:
             user_id="user-123",
             tenant_id="tenant-456",
             email="test@example.com",
-            roles=["user"]
+            roles=["user"],
+            permissions=["agents:execute"],
+            is_superuser=False
         )
 
         result = await record_execution_cost(
@@ -677,7 +679,9 @@ class TestMainAPIEnhanced:
             user_id="user-123",
             tenant_id="tenant-456",
             email="test@example.com",
-            roles=["user"]
+            roles=["user"],
+            permissions=["agents:execute"],
+            is_superuser=False
         )
 
         result = await record_execution_cost(

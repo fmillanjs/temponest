@@ -391,8 +391,8 @@ def test_auth_context(test_user_id, test_tenant_id):
     from app.auth_client import AuthContext
 
     return AuthContext(
-        user_id=test_user_id,
-        tenant_id=test_tenant_id,
+        user_id=str(test_user_id),
+        tenant_id=str(test_tenant_id),
         email="test@example.com",
         roles=["admin"],
         permissions=["agents:read", "agents:write", "agents:execute"],
