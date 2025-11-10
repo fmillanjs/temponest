@@ -416,3 +416,137 @@ class TestDepartmentsRoutesEnhanced:
 
         # Cleanup
         set_department_manager(None)
+
+
+@pytest.mark.integration
+class TestDepartmentsManagerNotInitialized:
+    """Test suite for department routes when manager is not initialized"""
+
+    @pytest.mark.asyncio
+    async def test_get_department_manager_not_initialized(
+        self,
+        authenticated_client: AsyncClient
+    ):
+        """Test getting department when manager is not initialized returns 503"""
+        from app.routers.departments import set_department_manager
+
+        # Ensure manager is None
+        set_department_manager(None)
+
+        response = await authenticated_client.get(
+            "/departments/engineering",
+            headers={"Authorization": "Bearer test-token"}
+        )
+
+        assert response.status_code == 503
+        data = response.json()
+        assert "not initialized" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_list_department_agents_manager_not_initialized(
+        self,
+        authenticated_client: AsyncClient
+    ):
+        """Test listing agents when manager is not initialized returns 503"""
+        from app.routers.departments import set_department_manager
+
+        # Ensure manager is None
+        set_department_manager(None)
+
+        response = await authenticated_client.get(
+            "/departments/engineering/agents",
+            headers={"Authorization": "Bearer test-token"}
+        )
+
+        assert response.status_code == 503
+        data = response.json()
+        assert "not initialized" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_list_all_workflows_manager_not_initialized(
+        self,
+        authenticated_client: AsyncClient
+    ):
+        """Test listing all workflows when manager is not initialized returns 503"""
+        from app.routers.departments import set_department_manager
+
+        # Ensure manager is None
+        set_department_manager(None)
+
+        response = await authenticated_client.get(
+            "/departments/workflows/all",
+            headers={"Authorization": "Bearer test-token"}
+        )
+
+        assert response.status_code == 503
+        data = response.json()
+        assert "not initialized" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_workflow_manager_not_initialized(
+        self,
+        authenticated_client: AsyncClient
+    ):
+        """Test executing workflow when manager is not initialized returns 503"""
+        from app.routers.departments import set_department_manager
+
+        # Ensure manager is None
+        set_department_manager(None)
+
+        response = await authenticated_client.post(
+            "/departments/workflows/execute",
+            json={
+                "workflow_path": "engineering.deploy",
+                "context": {}
+            },
+            headers={"Authorization": "Bearer test-token"}
+        )
+
+        assert response.status_code == 503
+        data = response.json()
+        assert "not initialized" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_agent_task_manager_not_initialized(
+        self,
+        authenticated_client: AsyncClient
+    ):
+        """Test executing agent task when manager is not initialized returns 503"""
+        from app.routers.departments import set_department_manager
+
+        # Ensure manager is None
+        set_department_manager(None)
+
+        response = await authenticated_client.post(
+            "/departments/agents/execute",
+            json={
+                "agent_path": "engineering.dev1",
+                "task": "Review code",
+                "context": {}
+            },
+            headers={"Authorization": "Bearer test-token"}
+        )
+
+        assert response.status_code == 503
+        data = response.json()
+        assert "not initialized" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_get_org_structure_manager_not_initialized(
+        self,
+        authenticated_client: AsyncClient
+    ):
+        """Test getting org structure when manager is not initialized returns 503"""
+        from app.routers.departments import set_department_manager
+
+        # Ensure manager is None
+        set_department_manager(None)
+
+        response = await authenticated_client.get(
+            "/departments/structure",
+            headers={"Authorization": "Bearer test-token"}
+        )
+
+        assert response.status_code == 503
+        data = response.json()
+        assert "not initialized" in data["detail"].lower()
