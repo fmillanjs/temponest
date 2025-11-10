@@ -38,7 +38,7 @@ describe('API Route: /api/financials/run', () => {
       const request = new NextRequest('http://localhost:3000/api/financials/run', {
         method: 'POST',
         body: JSON.stringify({
-          model: 'conservative',
+          model: 'formbuilder',
           args: ['arg1', 'arg2'],
           workdir: '/tmp/test',
         }),
@@ -53,7 +53,7 @@ describe('API Route: /api/financials/run', () => {
 
       expect(execModule.execStream).toHaveBeenCalledWith(
         'python3',
-        ['tools/saas-calculator.py', 'conservative', 'arg1', 'arg2'],
+        ['tools/saas-calculator.py', 'formbuilder', 'arg1', 'arg2'],
         { cwd: '/tmp/test' }
       )
     })
@@ -72,7 +72,7 @@ describe('API Route: /api/financials/run', () => {
       const request = new NextRequest('http://localhost:3000/api/financials/run', {
         method: 'POST',
         body: JSON.stringify({
-          model: 'aggressive',
+          model: 'analytics',
           workdir: '/tmp/test',
         }),
       })
@@ -82,7 +82,7 @@ describe('API Route: /api/financials/run', () => {
       expect(response.status).toBe(200)
       expect(execModule.execStream).toHaveBeenCalledWith(
         'python3',
-        ['tools/saas-calculator.py', 'aggressive'],
+        ['tools/saas-calculator.py', 'analytics'],
         { cwd: '/tmp/test' }
       )
     })
@@ -109,7 +109,7 @@ describe('API Route: /api/financials/run', () => {
       const request = new NextRequest('http://localhost:3000/api/financials/run', {
         method: 'POST',
         body: JSON.stringify({
-          model: 'conservative',
+          model: 'crm',
           workdir: '/tmp/test',
         }),
       })
@@ -136,7 +136,7 @@ describe('API Route: /api/financials/run', () => {
       const request = new NextRequest('http://localhost:3000/api/financials/run', {
         method: 'POST',
         body: JSON.stringify({
-          model: 'conservative',
+          model: 'scheduler',
           workdir: '/tmp/test',
         }),
       })
@@ -163,7 +163,7 @@ describe('API Route: /api/financials/run', () => {
       const request = new NextRequest('http://localhost:3000/api/financials/run', {
         method: 'POST',
         body: JSON.stringify({
-          model: 'conservative',
+          model: 'emailbuilder',
           workdir: '/tmp/test',
         }),
       })

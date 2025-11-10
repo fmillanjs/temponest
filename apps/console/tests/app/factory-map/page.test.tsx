@@ -26,9 +26,11 @@ vi.mock('@/components/FactoryMap', () => ({
 }))
 
 describe('FactoryMapPage', () => {
-  const { prisma } = await import('@/lib/db/client')
+  let prisma: any
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const imported = await import('@/lib/db/client')
+    prisma = imported.prisma
     vi.clearAllMocks()
   })
 

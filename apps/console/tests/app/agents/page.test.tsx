@@ -24,9 +24,11 @@ vi.mock('@/components/AgentStatusCard', () => ({
 }))
 
 describe('AgentsPage', () => {
-  const { prisma } = await import('@/lib/db/client')
+  let prisma: any
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const imported = await import('@/lib/db/client')
+    prisma = imported.prisma
     vi.clearAllMocks()
   })
 
