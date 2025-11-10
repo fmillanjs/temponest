@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 import asyncpg
+import httpx
 from httpx import AsyncClient, Response
 import respx
 
@@ -81,12 +82,14 @@ async def clean_db(db_pool, test_tenant_id, test_user_id):
             ON CONFLICT (id) DO NOTHING
         """, test_tenant_id)
 
-        # Create test user if it doesn't exist
+        # Create test user with test-specific email to avoid conflicts
+        test_email = f'test-scheduler-{test_user_id}@example.com'
         await conn.execute("""
             INSERT INTO users (id, tenant_id, email, hashed_password, full_name, created_at)
-            VALUES ($1, $2, 'test@example.com', 'test_hash', 'Test User', CURRENT_TIMESTAMP)
-            ON CONFLICT (email) DO NOTHING
-        """, test_user_id, test_tenant_id)
+            VALUES ($1, $2, $3, 'test_hash', 'Test User', CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO UPDATE
+            SET email = EXCLUDED.email, tenant_id = EXCLUDED.tenant_id
+        """, test_user_id, test_tenant_id, test_email)
 
     yield
     # Clean up after test as well
@@ -103,7 +106,15 @@ async def clean_db(db_pool, test_tenant_id, test_user_id):
 async def scheduler(db_manager):
     """Create a TaskScheduler instance"""
     scheduler = TaskScheduler(db_manager)
+    # Initialize http_client for testing (without starting the scheduler)
+    scheduler.http_client = httpx.AsyncClient(
+        base_url=settings.agent_service_url,
+        timeout=httpx.Timeout(300.0)
+    )
     yield scheduler
+    # Clean up http_client
+    if scheduler.http_client:
+        await scheduler.http_client.aclose()
     # Stop scheduler if running
     if scheduler.is_running():
         await scheduler.stop()

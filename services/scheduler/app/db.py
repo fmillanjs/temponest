@@ -48,7 +48,15 @@ class DatabaseManager:
                 LIMIT $1
             """, limit)
 
-            return [dict(row) for row in rows]
+            # Parse task_payload from JSON string to dict for each task
+            tasks = []
+            for row in rows:
+                task = dict(row)
+                if isinstance(task.get('task_payload'), str):
+                    task['task_payload'] = json.loads(task['task_payload'])
+                tasks.append(task)
+
+            return tasks
 
     async def update_next_execution_time(self, task_id: UUID, next_execution: datetime):
         """Update the next execution time for a scheduled task"""
@@ -104,6 +112,9 @@ class DatabaseManager:
         duration_ms: int
     ):
         """Mark task execution as completed"""
+        # Convert result dict to JSON string for JSONB column
+        result_json = json.dumps(result) if isinstance(result, dict) else result
+
         async with self.pool.acquire() as conn:
             await conn.execute("""
                 UPDATE task_executions
@@ -115,7 +126,7 @@ class DatabaseManager:
                     duration_ms = $4,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $5
-            """, result, tokens_used, cost_usd, duration_ms, execution_id)
+            """, result_json, tokens_used, cost_usd, duration_ms, execution_id)
 
     async def update_task_execution_failed(
         self,
@@ -155,7 +166,14 @@ class DatabaseManager:
                 WHERE id = $1 AND tenant_id = $2
             """, task_id, tenant_id)
 
-            return dict(row) if row else None
+            if not row:
+                return None
+
+            task = dict(row)
+            # Parse task_payload from JSON string to dict if needed
+            if isinstance(task.get('task_payload'), str):
+                task['task_payload'] = json.loads(task['task_payload'])
+            return task
 
     async def list_scheduled_tasks(
         self,
@@ -195,7 +213,15 @@ class DatabaseManager:
             params.extend([page_size, offset])
             rows = await conn.fetch(list_query, *params)
 
-            return [dict(row) for row in rows], total
+            # Parse task_payload from JSON string to dict for each task
+            tasks = []
+            for row in rows:
+                task = dict(row)
+                if isinstance(task.get('task_payload'), str):
+                    task['task_payload'] = json.loads(task['task_payload'])
+                tasks.append(task)
+
+            return tasks, total
 
     async def create_scheduled_task(
         self,
@@ -317,4 +343,18 @@ class DatabaseManager:
                 LIMIT $3 OFFSET $4
             """, scheduled_task_id, tenant_id, page_size, offset)
 
-            return [dict(row) for row in rows], total
+            # Convert rows to dicts and handle type conversions
+            executions = []
+            for row in rows:
+                execution = dict(row)
+                # Convert Decimal to float for cost_usd
+                if execution.get('cost_usd') is not None:
+                    from decimal import Decimal
+                    if isinstance(execution['cost_usd'], Decimal):
+                        execution['cost_usd'] = float(execution['cost_usd'])
+                # Parse result from JSON string to dict if needed
+                if isinstance(execution.get('result'), str):
+                    execution['result'] = json.loads(execution['result'])
+                executions.append(execution)
+
+            return executions, total
