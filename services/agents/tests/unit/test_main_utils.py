@@ -395,7 +395,7 @@ class TestUpdateMetricsPeriodically:
     @patch("app.main.rag_memory")
     @patch("app.main.langfuse_tracer")
     @patch("app.main.db_pool")
-    @patch("app.main.MetricsRecorder")
+    @patch("app.metrics.MetricsRecorder")
     async def test_update_metrics_all_healthy(
         self,
         mock_metrics,
