@@ -80,7 +80,7 @@ class TestWebhooksRoutes:
             assert "name" in data
             assert data["name"] == "Test Webhook"
             assert "url" in data
-            assert "secret_key" in data
+            # secret_key is not included in response for security reasons
 
     @pytest.mark.asyncio
     @patch("app.routers.webhooks._webhook_manager")

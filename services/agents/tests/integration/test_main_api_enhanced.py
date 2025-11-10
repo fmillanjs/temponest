@@ -112,7 +112,7 @@ class TestMainAPIEnhanced:
             prompt_tokens=1000,
             completion_tokens=500
         )
-        mock_overseer.kickoff = AsyncMock(return_value=mock_result)
+        mock_overseer.execute = AsyncMock(return_value=mock_result)
 
         # Mock cost tracking
         mock_record_cost.return_value = {
@@ -211,7 +211,7 @@ class TestMainAPIEnhanced:
             prompt_tokens=1200,
             completion_tokens=800
         )
-        mock_developer.kickoff = AsyncMock(return_value=mock_result)
+        mock_developer.execute = AsyncMock(return_value=mock_result)
 
         # Mock cost tracking
         mock_record_cost.return_value = {
@@ -255,7 +255,7 @@ class TestMainAPIEnhanced:
         mock_result = MagicMock()
         mock_result.raw = "Test plan created with 10 test cases"
         mock_result.token_usage = MagicMock(total_tokens=1800)
-        mock_qa.kickoff = AsyncMock(return_value=mock_result)
+        mock_qa.execute = AsyncMock(return_value=mock_result)
 
         mock_record_cost.return_value = {
             "task_id": "test-task-789",
@@ -296,7 +296,7 @@ class TestMainAPIEnhanced:
         mock_result = MagicMock()
         mock_result.raw = "CI/CD pipeline configured successfully"
         mock_result.token_usage = MagicMock(total_tokens=1600)
-        mock_devops.kickoff = AsyncMock(return_value=mock_result)
+        mock_devops.execute = AsyncMock(return_value=mock_result)
 
         mock_record_cost.return_value = {"task_id": "test-task-101", "total_cost_usd": "0.0160"}
 
@@ -334,7 +334,7 @@ class TestMainAPIEnhanced:
         mock_result = MagicMock()
         mock_result.raw = "Dashboard design mockups created"
         mock_result.token_usage = MagicMock(total_tokens=1700)
-        mock_designer.kickoff = AsyncMock(return_value=mock_result)
+        mock_designer.execute = AsyncMock(return_value=mock_result)
 
         mock_record_cost.return_value = {"task_id": "test-task-202", "total_cost_usd": "0.0170"}
 
@@ -372,7 +372,7 @@ class TestMainAPIEnhanced:
         mock_result = MagicMock()
         mock_result.raw = "Security audit completed: 5 vulnerabilities found"
         mock_result.token_usage = MagicMock(total_tokens=2200)
-        mock_security.kickoff = AsyncMock(return_value=mock_result)
+        mock_security.execute = AsyncMock(return_value=mock_result)
 
         mock_record_cost.return_value = {"task_id": "test-task-303", "total_cost_usd": "0.0220"}
 
@@ -410,7 +410,7 @@ class TestMainAPIEnhanced:
         mock_result = MagicMock()
         mock_result.raw = "UX research findings documented with 3 key insights"
         mock_result.token_usage = MagicMock(total_tokens=1900)
-        mock_ux.kickoff = AsyncMock(return_value=mock_result)
+        mock_ux.execute = AsyncMock(return_value=mock_result)
 
         mock_record_cost.return_value = {"task_id": "test-task-404", "total_cost_usd": "0.0190"}
 
@@ -437,7 +437,7 @@ class TestMainAPIEnhanced:
     ):
         """Test error handling when agent execution fails"""
         # Mock agent to raise an exception
-        mock_overseer.kickoff = AsyncMock(side_effect=Exception("Agent execution failed"))
+        mock_overseer.execute = AsyncMock(side_effect=Exception("Agent execution failed"))
 
         response = await client.post(
             "/overseer/run",
@@ -471,7 +471,7 @@ class TestMainAPIEnhanced:
         mock_result = MagicMock()
         mock_result.raw = "First execution"
         mock_result.token_usage = MagicMock(total_tokens=1000)
-        mock_overseer.kickoff = AsyncMock(return_value=mock_result)
+        mock_overseer.execute = AsyncMock(return_value=mock_result)
 
         idempotency_key = "unique-key-12345"
 
@@ -752,7 +752,7 @@ class TestMainAPIEnhanced:
         mock_result = MagicMock()
         mock_result.raw = "Code generated"
         mock_result.token_usage = MagicMock(total_tokens=1000)
-        mock_developer.kickoff = AsyncMock(return_value=mock_result)
+        mock_developer.execute = AsyncMock(return_value=mock_result)
 
         custom_context = {
             "language": "python",
