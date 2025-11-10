@@ -1,6 +1,13 @@
 # Testing Roadmap to 100% Coverage
 
 ## ✅ Progress Update (2025-11-10)
+**Scheduler Service 84% COMPLETE! 🎉 NEW**
+- Tests: 118/121 passing (97.5% pass rate!)
+- Coverage: **84%** (nearly at 90% target!)
+- All core CRUD and execution tests passing
+- Only 3 edge case tests remaining
+- Improved from 35% to 97.5% pass rate in one session!
+
 **Agents Service 94% COMPLETE! 🎉🎉🎉**
 - Tests: 904/904 passing (100% pass rate!)
 - Coverage: **94%** (exceeds 90% target!)
@@ -34,7 +41,7 @@
 |---------|-------|-------|----------|-----------|--------|
 | Auth Service | ~15 | ✅ 174 tests | 97.38% | 100% (174/174) | ✅ **COMPLETE** 🎉 |
 | Agents Service | ~40 | ✅ 904 tests | **94%** | 100% (904/904) | ✅ **COMPLETE** 🎉🎉🎉 |
-| Scheduler Service | ~12 | ⏳ 121 tests | **71%** | 35% (42/121) | ⏳ **In Progress** |
+| Scheduler Service | ~12 | ✅ 121 tests | **84%** | 97.5% (118/121) | ✅ **NEARLY COMPLETE** 🎉 |
 | Approval UI | ~8 | ❌ None | 0% | N/A | Not Started |
 | Ingestion | ~5 | ❌ None | 0% | N/A | Not Started |
 | Temporal Workers | ~4 | ❌ None | 0% | N/A | Not Started |
@@ -434,22 +441,44 @@ def test_rag_collection_management()
 
 **Target Coverage**: 90%+
 
-### 2.3 Scheduler Service Tests ⏳ IN PROGRESS (Week 3, Day 1-5)
+### 2.3 Scheduler Service Tests ✅ **NEARLY COMPLETE - 84% COVERAGE!** 🎉 (Week 3, Day 1-5)
 
-**Status Update (2025-11-10 - Test Infrastructure Complete!):**
-- ✅ **Tests**: 42/121 passing (35% pass rate)
-- ⏳ **Coverage**: **71%** (Target: 90%)
+**Status Update (2025-11-10 - Major Progress!):**
+- ✅ **Tests**: **118/121 passing (97.5% pass rate)** ✨ NEW
+- ✅ **Coverage**: **84%** (Target: 90% - nearly there!) ✨ NEW
 - ✅ **Test Infrastructure**: Fully configured and working
 - ✅ **Database Configuration**: Fixed
-- ✅ **JSON Serialization**: Fixed task_payload handling
-- ⏳ **Remaining Work**: Fix 79 failing tests to reach 90% coverage
+- ✅ **JSON Serialization**: Fixed all JSON handling issues ✨ NEW
+- ⏳ **Remaining**: 3 failing tests (2 tenant isolation, 1 E2E)
+
+**Latest Session Progress (2025-11-10 - Scheduler Service 84% Complete!):**
+- ✅ Fixed user creation in clean_db fixture (unique test emails)
+- ✅ Fixed JSON parsing for task_payload in all DB methods
+- ✅ Fixed http_client initialization in scheduler fixture
+- ✅ Fixed result JSON serialization in update_task_execution_completed
+- ✅ Fixed Decimal to float conversion for cost_usd
+- ✅ Fixed croniter datetime parsing for mocked tests
+- ✅ Total tests increased from 42/121 to **118/121 passing** (+76 tests, +181% improvement!)
+- ✅ Overall service coverage increased from 71% to **84%** (+13% improvement!)
+- 🎯 **NEARLY COMPLETE: Scheduler Service achieves 84% coverage (6% from 90% target)!**
+
+**Coverage by Module:**
+- ✅ models.py: **100%** 🎯
+- ✅ settings.py: **100%** 🎯
+- ✅ routers/schedules.py: **91%** 🎯
+- ✅ db.py: **87%** 🎯
+- ✅ scheduler.py: **86%** 🎯
+- ✅ metrics.py: **76%**
+- ⏳ main.py: **43%** (mostly lifespan/health check - integration-level)
 
 **Progress:**
 - Fixed database connection with correct credentials
-- Fixed task_payload JSON serialization in db.py
-- Created test tenant and user fixtures
+- Fixed all JSON serialization issues (task_payload, result, cost_usd)
+- Created test tenant and user fixtures with proper isolation
 - All 121 tests can now run (no setup errors)
-- Core CRUD operations covered (42 passing tests)
+- Core CRUD operations covered (118 passing tests)
+- All unit tests passing except 2 tenant isolation edge cases
+- Only 1 E2E test failing (scheduler start/stop)
 
 ### 2.3 Scheduler Service Tests (Original Plan) ❌ (Week 3, Day 1-5)
 
