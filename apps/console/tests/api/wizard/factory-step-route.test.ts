@@ -140,7 +140,17 @@ describe('API Route: /api/wizard/factory/step', () => {
       expect(data).toHaveProperty('error')
     })
 
-    it('should return 400 for invalid schema (missing workdir)', async () => {
+    it('should use default workdir when not provided', async () => {
+      const mockChild = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn((event, callback) => {
+          if (event === 'close') callback(0)
+        }),
+      }
+
+      vi.mocked(execModule.execStream).mockReturnValue(mockChild as any)
+
       const request = new NextRequest('http://localhost:3000/api/wizard/factory/step', {
         method: 'POST',
         body: JSON.stringify({
@@ -150,9 +160,12 @@ describe('API Route: /api/wizard/factory/step', () => {
 
       const response = await POST(request)
 
-      expect(response.status).toBe(400)
-      const data = await response.json()
-      expect(data).toHaveProperty('error')
+      expect(response.status).toBe(200)
+      expect(execModule.execStream).toHaveBeenCalledWith(
+        '/bin/bash',
+        ['-lc', './cli/saas-factory-init.sh init '],
+        { cwd: '/home/doctor/temponest' }
+      )
     })
 
     it('should handle process error gracefully', async () => {

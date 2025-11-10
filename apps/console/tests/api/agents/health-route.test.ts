@@ -20,13 +20,15 @@ describe('API Route: /api/agents/health', () => {
 
   describe('GET /api/agents/health', () => {
     it('should return list of agents ordered by name', async () => {
+      const mockDate1 = new Date('2025-11-07T10:00:00Z')
+      const mockDate2 = new Date('2025-11-07T11:00:00Z')
       const mockAgents = [
         {
           id: '1',
           name: 'agent-1',
           version: '1.0.0',
           status: 'healthy',
-          lastHeartbeat: new Date(),
+          lastHeartbeat: mockDate1,
           config: {},
         },
         {
@@ -34,7 +36,7 @@ describe('API Route: /api/agents/health', () => {
           name: 'agent-2',
           version: '1.0.1',
           status: 'unhealthy',
-          lastHeartbeat: new Date(),
+          lastHeartbeat: mockDate2,
           config: {},
         },
       ]
@@ -46,7 +48,15 @@ describe('API Route: /api/agents/health', () => {
 
       expect(response.status).toBe(200)
       const data = await response.json()
-      expect(data).toEqual({ agents: mockAgents })
+      // Dates are serialized to strings in JSON
+      expect(data).toMatchObject({
+        agents: [
+          { id: '1', name: 'agent-1', version: '1.0.0', status: 'healthy', config: {} },
+          { id: '2', name: 'agent-2', version: '1.0.1', status: 'unhealthy', config: {} },
+        ]
+      })
+      expect(typeof data.agents[0].lastHeartbeat).toBe('string')
+      expect(typeof data.agents[1].lastHeartbeat).toBe('string')
 
       expect(prisma.agent.findMany).toHaveBeenCalledWith({
         orderBy: { name: 'asc' },
@@ -89,12 +99,13 @@ describe('API Route: /api/agents/health', () => {
 
   describe('POST /api/agents/health', () => {
     it('should create new agent with heartbeat', async () => {
+      const mockDate = new Date('2025-11-07T12:00:00Z')
       const mockAgent = {
         id: 'new-agent-id',
         name: 'test-agent',
         version: '2.0.0',
         status: 'healthy',
-        lastHeartbeat: new Date(),
+        lastHeartbeat: mockDate,
         config: { key: 'value' },
       }
 
@@ -113,7 +124,17 @@ describe('API Route: /api/agents/health', () => {
 
       expect(response.status).toBe(200)
       const data = await response.json()
-      expect(data).toEqual({ agent: mockAgent })
+      // Dates are serialized to strings in JSON
+      expect(data).toMatchObject({
+        agent: {
+          id: 'new-agent-id',
+          name: 'test-agent',
+          version: '2.0.0',
+          status: 'healthy',
+          config: { key: 'value' },
+        }
+      })
+      expect(typeof data.agent.lastHeartbeat).toBe('string')
 
       expect(prisma.agent.upsert).toHaveBeenCalledWith({
         where: { name: 'test-agent' },
@@ -133,12 +154,13 @@ describe('API Route: /api/agents/health', () => {
     })
 
     it('should update existing agent heartbeat', async () => {
+      const mockDate = new Date('2025-11-07T13:00:00Z')
       const mockAgent = {
         id: 'existing-agent-id',
         name: 'existing-agent',
         version: '2.1.0',
         status: 'healthy',
-        lastHeartbeat: new Date(),
+        lastHeartbeat: mockDate,
         config: {},
       }
 
@@ -156,7 +178,17 @@ describe('API Route: /api/agents/health', () => {
 
       expect(response.status).toBe(200)
       const data = await response.json()
-      expect(data).toEqual({ agent: mockAgent })
+      // Dates are serialized to strings in JSON
+      expect(data).toMatchObject({
+        agent: {
+          id: 'existing-agent-id',
+          name: 'existing-agent',
+          version: '2.1.0',
+          status: 'healthy',
+          config: {},
+        }
+      })
+      expect(typeof data.agent.lastHeartbeat).toBe('string')
     })
 
     it('should default config to empty object if not provided', async () => {

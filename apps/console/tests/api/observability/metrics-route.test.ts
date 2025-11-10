@@ -37,8 +37,6 @@ describe('API Route: /api/observability/metrics', () => {
           finishedAt: new Date('2025-01-01T10:06:30Z'),
         },
       ]
-      vi.mocked(prisma.run.findMany).mockResolvedValue(mockCompletedRuns as any)
-
       const mockStatusDistribution = [
         { status: 'success', count: BigInt(15) },
         { status: 'failed', count: BigInt(3) },
@@ -58,11 +56,14 @@ describe('API Route: /api/observability/metrics', () => {
         },
       ]
 
+      // Set up mocks in correct order: first findMany is for completedRuns, second is for recentErrors
+      vi.mocked(prisma.run.findMany)
+        .mockResolvedValueOnce(mockCompletedRuns as any)
+        .mockResolvedValueOnce(mockRecentErrors as any)
+
       vi.mocked(prisma.$queryRaw)
         .mockResolvedValueOnce(mockStatusDistribution)
         .mockResolvedValueOnce(mockRunsByAgent)
-
-      vi.mocked(prisma.run.findMany).mockResolvedValueOnce(mockRecentErrors as any)
 
       const response = await GET()
 

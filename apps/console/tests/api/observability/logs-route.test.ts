@@ -305,13 +305,14 @@ describe('API Route: /api/observability/logs', () => {
 
       expect(response.status).toBe(200)
 
-      // When both search and agent are provided, search takes precedence
+      // When both search and agent are provided, both filters are applied
       expect(prisma.auditLog.findMany).toHaveBeenCalledWith({
         where: {
           OR: [
             { action: { contains: 'build', mode: 'insensitive' } },
             { resource: { contains: 'build', mode: 'insensitive' } },
           ],
+          action: { contains: 'Developer', mode: 'insensitive' },
         },
         orderBy: { createdAt: 'desc' },
         take: 50,
