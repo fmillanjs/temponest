@@ -237,6 +237,8 @@ class TaskScheduler:
 
     def _calculate_next_execution(self, task: Dict[str, Any]) -> Optional[datetime]:
         """Calculate the next execution time based on schedule type"""
+        from datetime import datetime as dt_class
+
         schedule_type = task['schedule_type']
         timezone_str = task.get('timezone', 'UTC')
         tz = pytz.timezone(timezone_str)
@@ -249,7 +251,9 @@ class TaskScheduler:
 
             try:
                 cron = croniter(cron_expression, now)
-                next_time = cron.get_next(datetime)
+                # Get next execution as float timestamp then convert using real datetime class
+                next_timestamp = cron.get_next(float)
+                next_time = dt_class.fromtimestamp(next_timestamp, tz=tz)
                 # Convert to UTC for storage
                 return next_time.astimezone(pytz.UTC).replace(tzinfo=None)
             except Exception as e:
