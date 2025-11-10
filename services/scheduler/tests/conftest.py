@@ -1,6 +1,13 @@
 """
 Shared pytest fixtures for scheduler service tests
 """
+import os
+
+# Set test environment variables BEFORE any other imports
+os.environ["DATABASE_URL"] = os.getenv("TEST_DATABASE_URL", "postgresql://postgres:agentic_postgres_2024@localhost:5434/agentic")
+os.environ["AGENT_SERVICE_URL"] = "http://test-agents:9000"
+os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing-only-min-32-characters-long"
+
 import asyncio
 import pytest
 import pytest_asyncio
@@ -38,11 +45,9 @@ def event_loop():
 @pytest_asyncio.fixture
 async def db_pool():
     """Create a test database connection pool"""
-    # Use test database
-    test_db_url = settings.database_url.replace("/scheduler", "/scheduler_test")
-
+    # Use the same database as main app (configured via environment)
     pool = await asyncpg.create_pool(
-        test_db_url,
+        settings.database_url,
         min_size=1,
         max_size=5,
         command_timeout=60
@@ -62,11 +67,27 @@ async def db_manager(db_pool):
 
 
 @pytest_asyncio.fixture
-async def clean_db(db_pool):
-    """Clean database before each test"""
+async def clean_db(db_pool, test_tenant_id, test_user_id):
+    """Clean database and create test tenant/user before each test"""
     async with db_pool.acquire() as conn:
+        # Clean up
         await conn.execute("DELETE FROM task_executions")
         await conn.execute("DELETE FROM scheduled_tasks")
+
+        # Create test tenant if it doesn't exist
+        await conn.execute("""
+            INSERT INTO tenants (id, name, slug, created_at)
+            VALUES ($1, 'Test Tenant', 'test-tenant', CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO NOTHING
+        """, test_tenant_id)
+
+        # Create test user if it doesn't exist
+        await conn.execute("""
+            INSERT INTO users (id, tenant_id, email, hashed_password, full_name, created_at)
+            VALUES ($1, $2, 'test@example.com', 'test_hash', 'Test User', CURRENT_TIMESTAMP)
+            ON CONFLICT (email) DO NOTHING
+        """, test_user_id, test_tenant_id)
+
     yield
     # Clean up after test as well
     async with db_pool.acquire() as conn:

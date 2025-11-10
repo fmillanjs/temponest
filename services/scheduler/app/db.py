@@ -2,6 +2,7 @@
 Database operations for scheduler service
 """
 import asyncpg
+import json
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 from uuid import UUID
@@ -218,6 +219,9 @@ class DatabaseManager:
         is_paused: bool = False
     ) -> UUID:
         """Create a new scheduled task"""
+        # Convert task_payload dict to JSON string for JSONB column
+        task_payload_json = json.dumps(task_payload) if isinstance(task_payload, dict) else task_payload
+
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow("""
                 INSERT INTO scheduled_tasks (
@@ -230,7 +234,7 @@ class DatabaseManager:
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
                 RETURNING id
             """, tenant_id, user_id, name, description, schedule_type,
-                agent_name, task_payload, cron_expression, interval_seconds,
+                agent_name, task_payload_json, cron_expression, interval_seconds,
                 scheduled_time, timezone, project_id, workflow_id,
                 timeout_seconds, max_retries, retry_delay_seconds,
                 is_active, is_paused, user_id)

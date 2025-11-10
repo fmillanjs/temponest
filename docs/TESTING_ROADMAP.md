@@ -34,7 +34,7 @@
 |---------|-------|-------|----------|-----------|--------|
 | Auth Service | ~15 | ✅ 174 tests | 97.38% | 100% (174/174) | ✅ **COMPLETE** 🎉 |
 | Agents Service | ~40 | ✅ 904 tests | **94%** | 100% (904/904) | ✅ **COMPLETE** 🎉🎉🎉 |
-| Scheduler Service | ~12 | ❌ None | 0% | N/A | Not Started |
+| Scheduler Service | ~12 | ⏳ 121 tests | **71%** | 35% (42/121) | ⏳ **In Progress** |
 | Approval UI | ~8 | ❌ None | 0% | N/A | Not Started |
 | Ingestion | ~5 | ❌ None | 0% | N/A | Not Started |
 | Temporal Workers | ~4 | ❌ None | 0% | N/A | Not Started |
@@ -434,7 +434,24 @@ def test_rag_collection_management()
 
 **Target Coverage**: 90%+
 
-### 2.3 Scheduler Service Tests ❌ (Week 3, Day 1-5)
+### 2.3 Scheduler Service Tests ⏳ IN PROGRESS (Week 3, Day 1-5)
+
+**Status Update (2025-11-10 - Test Infrastructure Complete!):**
+- ✅ **Tests**: 42/121 passing (35% pass rate)
+- ⏳ **Coverage**: **71%** (Target: 90%)
+- ✅ **Test Infrastructure**: Fully configured and working
+- ✅ **Database Configuration**: Fixed
+- ✅ **JSON Serialization**: Fixed task_payload handling
+- ⏳ **Remaining Work**: Fix 79 failing tests to reach 90% coverage
+
+**Progress:**
+- Fixed database connection with correct credentials
+- Fixed task_payload JSON serialization in db.py
+- Created test tenant and user fixtures
+- All 121 tests can now run (no setup errors)
+- Core CRUD operations covered (42 passing tests)
+
+### 2.3 Scheduler Service Tests (Original Plan) ❌ (Week 3, Day 1-5)
 
 **Test Structure**:
 ```
