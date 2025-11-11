@@ -218,3 +218,37 @@ class TestCostsClientBudget:
 
             assert costs["gpt-4"] == 45.50
             assert len(costs) == 3
+
+
+class TestAsyncCostsClient:
+    """Test async costs client"""
+
+    @pytest.mark.asyncio
+    async def test_async_get_summary(self, clean_env, mock_cost_summary_data):
+        """Test getting cost summary (async)"""
+        from temponest_sdk.costs import AsyncCostsClient
+        from temponest_sdk.client import AsyncBaseClient
+
+        with patch.object(AsyncBaseClient, 'get', return_value=mock_cost_summary_data):
+            client = AsyncBaseClient(base_url="http://test.com", auth_token="test-token")
+            costs_client = AsyncCostsClient(client)
+
+            summary = await costs_client.get_summary()
+
+            assert isinstance(summary, CostSummary)
+            assert summary.total_usd == 15.50
+
+    @pytest.mark.asyncio
+    async def test_async_get_budget(self, clean_env, mock_budget_config_data):
+        """Test getting budget (async)"""
+        from temponest_sdk.costs import AsyncCostsClient
+        from temponest_sdk.client import AsyncBaseClient
+
+        with patch.object(AsyncBaseClient, 'get', return_value=mock_budget_config_data):
+            client = AsyncBaseClient(base_url="http://test.com", auth_token="test-token")
+            costs_client = AsyncCostsClient(client)
+
+            budget = await costs_client.get_budget()
+
+            assert isinstance(budget, BudgetConfig)
+            assert budget.monthly_limit_usd == 100.0
