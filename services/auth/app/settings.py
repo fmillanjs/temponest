@@ -29,8 +29,24 @@ class Settings(BaseSettings):
     RATE_LIMIT_AUTHENTICATED: str = "1000/hour"  # Authenticated users
     RATE_LIMIT_ADMIN: str = "unlimited"       # Admin users
 
-    # CORS
-    CORS_ORIGINS: list = ["*"]  # Configure in production
+    # CORS Configuration
+    # ⚠️ SECURITY WARNING: Do NOT use "*" in production!
+    # Set CORS_ORIGINS environment variable with comma-separated list of allowed origins
+    # Example: CORS_ORIGINS=https://app.yourdomain.com,https://console.yourdomain.com
+    # For development: http://localhost:3000,http://localhost:8080
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8080,http://localhost:8081"
+
+    @property
+    def cors_origins_list(self) -> list:
+        """
+        Parse CORS origins from comma-separated string.
+        Returns list of allowed origins for CORS middleware.
+        """
+        if self.CORS_ORIGINS == "*":
+            import logging
+            logging.warning("⚠️ CORS configured with wildcard (*) - INSECURE FOR PRODUCTION!")
+            return ["*"]
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
     # Security
     BCRYPT_ROUNDS: int = 12

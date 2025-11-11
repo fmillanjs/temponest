@@ -67,7 +67,7 @@ async def clean_db():
     # Clean up before test
     await db.connect()
     await db.execute("DELETE FROM api_keys")
-    await db.execute("DELETE FROM audit_logs")
+    await db.execute("DELETE FROM audit_log")
     await db.execute("DELETE FROM users WHERE email LIKE '%security_test%'")
     await db.execute("DELETE FROM tenants WHERE name LIKE '%Security Test%'")
 
@@ -75,7 +75,7 @@ async def clean_db():
 
     # Clean up after test
     await db.execute("DELETE FROM api_keys")
-    await db.execute("DELETE FROM audit_logs")
+    await db.execute("DELETE FROM audit_log")
     await db.execute("DELETE FROM users WHERE email LIKE '%security_test%'")
     await db.execute("DELETE FROM tenants WHERE name LIKE '%Security Test%'")
 
@@ -88,11 +88,12 @@ async def test_tenant(clean_db):
     tenant_id = uuid4()
     await db.execute(
         """
-        INSERT INTO tenants (id, name, is_active, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO tenants (id, name, slug, is_active, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
         """,
         tenant_id,
         "Security Test Tenant",
+        "security-test-tenant",
         True,
         datetime.utcnow(),
         datetime.utcnow()
@@ -100,7 +101,8 @@ async def test_tenant(clean_db):
 
     return {
         "id": tenant_id,
-        "name": "Security Test Tenant"
+        "name": "Security Test Tenant",
+        "slug": "security-test-tenant"
     }
 
 

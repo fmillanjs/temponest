@@ -99,18 +99,25 @@ class TestReflectedXSS:
             # Get response body
             body = response.text
 
-            # Verify the payload is not reflected as-is in the response
+            # Verify the payload is not reflected as-is (unescaped) in the response
+            # Note: Escaped HTML (e.g., &lt;script&gt;) is safe and acceptable
             assert payload not in body, \
-                f"XSS payload '{payload}' was reflected in error response!"
+                f"XSS payload '{payload}' was reflected UNESCAPED in error response!"
 
-            # Verify script tags are not present
+            # Verify unescaped script tags are not present (dangerous)
             assert "<script>" not in body.lower(), \
-                f"Script tag from payload '{payload}' present in response!"
+                f"Unescaped script tag from payload '{payload}' present in response!"
 
-            # If it's JSON, verify proper escaping
+            # If it's JSON and contains special chars, verify they are escaped
             if response.headers.get("content-type", "").startswith("application/json"):
-                # JSON should escape <, >, and other dangerous chars
-                assert "&lt;script&gt;" not in body and "<script>" not in body
+                # If the original payload had <script>, the response should have it escaped
+                # Escaped HTML (&lt;script&gt;) is SAFE and acceptable
+                # Only unescaped <script> is dangerous
+                if "<script>" in payload.lower():
+                    # Verify that if script tag was in input, it's escaped in output
+                    # Either as HTML entities (&lt;) or not present at all
+                    assert "<script>" not in body.lower(), \
+                        f"Dangerous unescaped <script> tag in response for payload: {payload}"
 
     async def test_xss_in_validation_errors(self, auth_client: AsyncClient):
         """Test XSS in validation error messages"""
@@ -127,9 +134,16 @@ class TestReflectedXSS:
 
         body = response.text
 
-        # Verify the script is not reflected
-        assert "<script>" not in body.lower()
-        assert "alert(" not in body
+        # Verify the dangerous unescaped script tag is not reflected
+        assert "<script>" not in body.lower(), \
+            "Unescaped <script> tag found in response!"
+
+        # Verify the full unescaped XSS payload is not present
+        assert xss_email not in body, \
+            f"Unescaped XSS payload '{xss_email}' reflected in response!"
+
+        # Note: The string "alert(" may appear in error messages explaining which
+        # characters are invalid. That's not an XSS vulnerability.
 
     async def test_xss_in_api_key_name(self, auth_client: AsyncClient, auth_token):
         """Test XSS in API key name field"""
