@@ -13,7 +13,7 @@ vi.mock('@/lib/db/client', () => ({
 
 // Mock next/link
 vi.mock('next/link', () => ({
-  default: ({ children, href }: any) => <a href={href}>{children}</a>,
+  default: ({ children, href, className }: any) => <a href={href} className={className}>{children}</a>,
 }))
 
 // Mock lucide-react icons
@@ -439,7 +439,13 @@ describe('ProjectsPage', () => {
       const { container } = render(page)
 
       const link = container.querySelector('a')
-      expect(link).toHaveClass('group', 'hover:shadow-soft-lg', 'hover:border-base-300')
+      expect(link).toBeTruthy()
+
+      // Check that link has the group class and hover utility classes
+      const classList = link?.className || ''
+      expect(classList).toContain('group')
+      expect(classList).toContain('hover:shadow-soft-lg')
+      expect(classList).toContain('hover:border-base-300')
     })
   })
 
