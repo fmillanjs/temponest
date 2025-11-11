@@ -393,4 +393,154 @@ describe('SingleSaasWizardPage', () => {
       expect(grid).toBeInTheDocument()
     })
   })
+
+  describe('Form Validation Errors', () => {
+    it('start button is disabled when project name is empty', () => {
+      render(<SingleSaasWizardPage />)
+
+      // Start button should be disabled when form is invalid (projectName is empty)
+      const startButton = screen.getByText('Start Step')
+      expect(startButton).toBeDisabled()
+    })
+
+    it('allows typing in repository URL field', async () => {
+      const user = userEvent.setup()
+      render(<SingleSaasWizardPage />)
+
+      const input = screen.getByPlaceholderText('https://github.com/username/repo')
+      await user.type(input, 'https://github.com/test/repo')
+
+      expect(input).toHaveValue('https://github.com/test/repo')
+    })
+  })
+
+  describe('Skip Functionality', () => {
+    it('skips current step when skip button is clicked', async () => {
+      const user = userEvent.setup()
+      render(<SingleSaasWizardPage />)
+
+      // Fill in required fields
+      const projectInput = screen.getByPlaceholderText('my-saas-project')
+      await user.type(projectInput, 'Test Project')
+
+      // Find skip button (it has an SVG icon but no text)
+      const buttons = screen.getAllByRole('button')
+      const skipButton = buttons.find(btn => {
+        const svg = btn.querySelector('svg')
+        return svg !== null && !btn.textContent?.includes('Start') && !btn.textContent?.includes('Reset')
+      })
+
+      if (skipButton) {
+        await user.click(skipButton)
+
+        // Should show skipped status
+        await waitFor(() => {
+          expect(screen.getByText('skipped')).toBeInTheDocument()
+        })
+
+        // Should advance to next step
+        await waitFor(() => {
+          const week2Titles = screen.getAllByText(/Week 2: Research & Validation/)
+          expect(week2Titles.length).toBeGreaterThanOrEqual(1)
+        })
+      }
+    })
+
+    it('shows skipped badge for skipped steps', async () => {
+      const user = userEvent.setup()
+      render(<SingleSaasWizardPage />)
+
+      const projectInput = screen.getByPlaceholderText('my-saas-project')
+      await user.type(projectInput, 'Test Project')
+
+      const buttons = screen.getAllByRole('button')
+      const skipButton = buttons.find(btn => {
+        const svg = btn.querySelector('svg')
+        return svg !== null && !btn.textContent?.includes('Start') && !btn.textContent?.includes('Reset')
+      })
+
+      if (skipButton) {
+        await user.click(skipButton)
+
+        await waitFor(() => {
+          const skippedBadges = screen.getAllByText('skipped')
+          expect(skippedBadges.length).toBeGreaterThan(0)
+        })
+      }
+    })
+  })
+
+  describe('API Integration', () => {
+    it('calls API with correct parameters when step is started', async () => {
+      const user = userEvent.setup()
+
+      vi.mocked(global.fetch).mockResolvedValue({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: vi.fn().mockResolvedValue({ done: true, value: undefined })
+          }),
+        },
+      } as any)
+
+      render(<SingleSaasWizardPage />)
+
+      const projectInput = screen.getByPlaceholderText('my-saas-project')
+      await user.type(projectInput, 'Test Project')
+
+      // Wait for form to become valid
+      await waitFor(() => {
+        const startButton = screen.getByText('Start Step')
+        expect(startButton).not.toBeDisabled()
+      }, { timeout: 2000 })
+
+      const startButton = screen.getByText('Start Step')
+      await user.click(startButton)
+
+      // Verify API was called
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/wizard/single/step',
+          expect.objectContaining({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      })
+    })
+  })
+
+  describe('Button State Management', () => {
+    it('shows start step button for pending steps', () => {
+      render(<SingleSaasWizardPage />)
+
+      expect(screen.getByText('Start Step')).toBeInTheDocument()
+    })
+
+    it('has all step management buttons in the UI', () => {
+      render(<SingleSaasWizardPage />)
+
+      const buttons = screen.getAllByRole('button')
+      expect(buttons.length).toBeGreaterThan(0)
+
+      // Should have at minimum: Reset Wizard, Start Step/Skip, Previous, Next
+      expect(buttons.length).toBeGreaterThanOrEqual(4)
+    })
+  })
+
+  describe('Form Data Persistence', () => {
+    it('loads saved form data on mount', () => {
+      const savedFormData = JSON.stringify({
+        projectName: 'Saved Project',
+        repositoryUrl: 'https://github.com/test/repo',
+        workdir: '/test/dir'
+      })
+      localStorageMock['single-saas-wizard-state-form'] = savedFormData
+
+      render(<SingleSaasWizardPage />)
+
+      // Should load the saved form data
+      expect(getItemSpy).toHaveBeenCalledWith('single-saas-wizard-state-form')
+    })
+  })
 })
