@@ -70,26 +70,46 @@ async def db_manager(db_pool):
 @pytest_asyncio.fixture
 async def clean_db(db_pool, test_tenant_id, test_user_id):
     """Clean database and create test tenant/user before each test"""
+    # Second tenant ID for isolation tests
+    tenant_2_id = UUID("22222222-2222-2222-2222-222222222222")
+    user_2_id = UUID("33333333-3333-3333-3333-333333333333")
+
     async with db_pool.acquire() as conn:
         # Clean up
         await conn.execute("DELETE FROM task_executions")
         await conn.execute("DELETE FROM scheduled_tasks")
 
-        # Create test tenant if it doesn't exist
+        # Create test tenant 1 if it doesn't exist
         await conn.execute("""
             INSERT INTO tenants (id, name, slug, created_at)
-            VALUES ($1, 'Test Tenant', 'test-tenant', CURRENT_TIMESTAMP)
+            VALUES ($1, 'Test Tenant 1', 'test-tenant-1', CURRENT_TIMESTAMP)
             ON CONFLICT (id) DO NOTHING
         """, test_tenant_id)
 
-        # Create test user with test-specific email to avoid conflicts
+        # Create test tenant 2 for isolation tests
+        await conn.execute("""
+            INSERT INTO tenants (id, name, slug, created_at)
+            VALUES ($1, 'Test Tenant 2', 'test-tenant-2', CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO NOTHING
+        """, tenant_2_id)
+
+        # Create test user 1 with test-specific email to avoid conflicts
         test_email = f'test-scheduler-{test_user_id}@example.com'
         await conn.execute("""
             INSERT INTO users (id, tenant_id, email, hashed_password, full_name, created_at)
-            VALUES ($1, $2, $3, 'test_hash', 'Test User', CURRENT_TIMESTAMP)
+            VALUES ($1, $2, $3, 'test_hash', 'Test User 1', CURRENT_TIMESTAMP)
             ON CONFLICT (id) DO UPDATE
             SET email = EXCLUDED.email, tenant_id = EXCLUDED.tenant_id
         """, test_user_id, test_tenant_id, test_email)
+
+        # Create test user 2 for tenant 2
+        test_email_2 = f'test-scheduler-{user_2_id}@example.com'
+        await conn.execute("""
+            INSERT INTO users (id, tenant_id, email, hashed_password, full_name, created_at)
+            VALUES ($1, $2, $3, 'test_hash', 'Test User 2', CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO UPDATE
+            SET email = EXCLUDED.email, tenant_id = EXCLUDED.tenant_id
+        """, user_2_id, tenant_2_id, test_email_2)
 
     yield
     # Clean up after test as well
@@ -275,13 +295,30 @@ async def create_test_schedule(db_manager, cron_schedule_data):
 
 
 @pytest_asyncio.fixture
-async def create_test_execution(db_manager, test_tenant_id, test_user_id):
+async def create_test_execution(db_manager, db_pool, test_tenant_id, test_user_id):
     """Helper fixture to create a test execution in the database"""
     async def _create(scheduled_task_id: UUID, **overrides):
+        # Get tenant_id and user_id from the scheduled task if not provided in overrides
+        if 'tenant_id' not in overrides:
+            async with db_pool.acquire() as conn:
+                task = await conn.fetchrow(
+                    "SELECT tenant_id, user_id FROM scheduled_tasks WHERE id = $1",
+                    scheduled_task_id
+                )
+                if task:
+                    task_tenant_id = task['tenant_id']
+                    task_user_id = task['user_id']
+                else:
+                    task_tenant_id = test_tenant_id
+                    task_user_id = test_user_id
+        else:
+            task_tenant_id = overrides['tenant_id']
+            task_user_id = overrides.get('user_id', test_user_id)
+
         defaults = {
             "scheduled_task_id": scheduled_task_id,
-            "tenant_id": test_tenant_id,
-            "user_id": test_user_id,
+            "tenant_id": task_tenant_id,
+            "user_id": task_user_id,
             "agent_name": "developer",
             "scheduled_for": datetime.utcnow(),
             "execution_number": 1,

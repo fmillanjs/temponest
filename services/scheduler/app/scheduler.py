@@ -51,15 +51,21 @@ class TaskScheduler:
     async def stop(self):
         """Stop the scheduler"""
         if self.scheduler.running:
-            self.scheduler.shutdown(wait=True)
+            # Shutdown scheduler in a thread to avoid blocking
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.scheduler.shutdown(wait=True)
+            )
             print("✅ Scheduler stopped")
 
         # Cancel active executions
-        for task in self.active_executions.values():
+        for task in list(self.active_executions.values()):
             task.cancel()
+        self.active_executions.clear()
 
         if self.http_client:
             await self.http_client.aclose()
+            self.http_client = None
 
     def is_running(self) -> bool:
         """Check if scheduler is running"""
