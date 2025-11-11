@@ -81,6 +81,88 @@ class TestCollectionManagement:
 
         assert exists is False
 
+    @patch('ingest.QdrantClient')
+    def test_ensure_collection_creates_when_not_exists(self, mock_qdrant_class, mock_qdrant_client):
+        """Test _ensure_collection creates collection when it doesn't exist"""
+        from qdrant_client.models import Distance, VectorParams
+        mock_qdrant_class.return_value = mock_qdrant_client
+
+        # Mock no existing collections
+        mock_collections = MagicMock()
+        mock_collections.collections = []
+        mock_qdrant_client.get_collections.return_value = mock_collections
+
+        processor = DocumentProcessor()
+
+        # Verify create_collection was called
+        mock_qdrant_client.create_collection.assert_called_once()
+        call_args = mock_qdrant_client.create_collection.call_args
+        assert call_args[1]["collection_name"] == "agentic_knowledge"
+
+    @patch('ingest.QdrantClient')
+    def test_ensure_collection_skips_when_exists(self, mock_qdrant_class, mock_qdrant_client):
+        """Test _ensure_collection skips creation when collection exists"""
+        mock_qdrant_class.return_value = mock_qdrant_client
+
+        # Mock existing collection
+        mock_collection = MagicMock()
+        mock_collection.name = "agentic_knowledge"
+        mock_collections = MagicMock()
+        mock_collections.collections = [mock_collection]
+        mock_qdrant_client.get_collections.return_value = mock_collections
+
+        processor = DocumentProcessor()
+
+        # create_collection should not be called
+        mock_qdrant_client.create_collection.assert_not_called()
+
+    @patch('ingest.QdrantClient')
+    def test_ensure_collection_handles_already_exists_error(self, mock_qdrant_class, mock_qdrant_client):
+        """Test _ensure_collection handles 'already exists' error gracefully"""
+        from qdrant_client.http.exceptions import UnexpectedResponse
+        mock_qdrant_class.return_value = mock_qdrant_client
+
+        # Mock no collections initially
+        mock_collections = MagicMock()
+        mock_collections.collections = []
+        mock_qdrant_client.get_collections.return_value = mock_collections
+
+        # Mock create_collection to raise "already exists" error
+        error_response = UnexpectedResponse(
+            status_code=409,
+            reason_phrase="Conflict",
+            content=b'{"status":"error","result":{"message":"Collection already exists"}}',
+            headers={}
+        )
+        mock_qdrant_client.create_collection.side_effect = error_response
+
+        # Should not raise exception
+        processor = DocumentProcessor()
+
+    @patch('ingest.QdrantClient')
+    def test_ensure_collection_raises_other_errors(self, mock_qdrant_class, mock_qdrant_client):
+        """Test _ensure_collection raises non-'already exists' errors"""
+        from qdrant_client.http.exceptions import UnexpectedResponse
+        mock_qdrant_class.return_value = mock_qdrant_client
+
+        # Mock no collections initially
+        mock_collections = MagicMock()
+        mock_collections.collections = []
+        mock_qdrant_client.get_collections.return_value = mock_collections
+
+        # Mock create_collection to raise different error
+        error_response = UnexpectedResponse(
+            status_code=500,
+            reason_phrase="Internal Server Error",
+            content=b'{"status":"error","result":{"message":"Database error"}}',
+            headers={}
+        )
+        mock_qdrant_client.create_collection.side_effect = error_response
+
+        # Should raise the exception
+        with pytest.raises(UnexpectedResponse):
+            processor = DocumentProcessor()
+
 
 class TestTextExtraction:
     """Test text extraction from various file formats"""
@@ -94,6 +176,32 @@ class TestTextExtraction:
         text = processor.extract_text(file_path)
 
         assert text == expected_content
+
+    @patch('ingest.QdrantClient')
+    @patch('ingest.PdfReader', None)
+    def test_extract_text_from_pdf_when_library_not_available(self, mock_qdrant_class, temp_dir):
+        """Test PDF extraction when pypdf is not installed"""
+        file_path = temp_dir / "test.pdf"
+        file_path.touch()
+
+        processor = DocumentProcessor()
+        text = processor.extract_text(str(file_path))
+
+        # Should return empty string when PDF library not available
+        assert text == ""
+
+    @patch('ingest.QdrantClient')
+    @patch('ingest.DocxDocument', None)
+    def test_extract_text_from_docx_when_library_not_available(self, mock_qdrant_class, temp_dir):
+        """Test DOCX extraction when python-docx is not installed"""
+        file_path = temp_dir / "test.docx"
+        file_path.touch()
+
+        processor = DocumentProcessor()
+        text = processor.extract_text(str(file_path))
+
+        # Should return empty string when DOCX library not available
+        assert text == ""
 
     @patch('ingest.QdrantClient')
     def test_extract_text_from_md(self, mock_qdrant_class, sample_md_file):

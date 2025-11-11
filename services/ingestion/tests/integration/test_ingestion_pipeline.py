@@ -315,6 +315,49 @@ class TestQdrantIntegration:
             assert all(h == base_hashes[0] for h in base_hashes)
 
 
+class TestMainFunction:
+    """Test main service function"""
+
+    @pytest.mark.asyncio
+    @patch('ingest.QdrantClient')
+    @patch('ingest.Observer')
+    @patch('ingest.Path')
+    async def test_main_service_initialization(
+        self, mock_path_class, mock_observer_class, mock_qdrant_class,
+        mock_qdrant_client
+    ):
+        """Test main service initializes correctly"""
+        from ingest import main
+        import asyncio
+
+        mock_qdrant_class.return_value = mock_qdrant_client
+        mock_observer = MagicMock()
+        mock_observer_class.return_value = mock_observer
+
+        # Mock Path to avoid creating actual directories
+        mock_path = MagicMock()
+        mock_path.mkdir = MagicMock()
+        mock_path_class.return_value = mock_path
+
+        # Mock collection info
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 100
+        mock_qdrant_client.get_collection.return_value = mock_collection_info
+
+        # Run main with a timeout to prevent infinite loop
+        try:
+            await asyncio.wait_for(main(), timeout=0.1)
+        except asyncio.TimeoutError:
+            # Expected - main() runs forever
+            pass
+        except KeyboardInterrupt:
+            # Also acceptable
+            pass
+
+        # Verify observer was started
+        mock_observer.start.assert_called_once()
+
+
 class TestDocumentWatcher:
     """Test DocumentWatcher file system monitoring"""
 
