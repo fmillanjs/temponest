@@ -3,6 +3,7 @@ Pytest configuration and shared fixtures for Approval UI tests.
 """
 
 import os
+import sys
 import pytest
 import asyncio
 from typing import AsyncGenerator, Generator
@@ -10,6 +11,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
 import asyncpg
+
+# Add parent directory to Python path so we can import modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Set test environment variables
 os.environ["DATABASE_URL"] = "postgresql://postgres:postgres@localhost:5432/test_approvals"
