@@ -434,6 +434,25 @@ describe('FactoryWizardPage', () => {
 
       expect(skipButtons.length).toBeGreaterThan(0)
     })
+
+    it('skips phase when skip button clicked', async () => {
+      const user = userEvent.setup()
+      render(<FactoryWizardPage />)
+
+      const skipButton = screen.getAllByRole('button').find(btn => {
+        const svg = btn.querySelector('svg')
+        return svg !== null && !btn.textContent?.includes('Start')
+      })
+
+      if (skipButton) {
+        await user.click(skipButton)
+
+        await waitFor(() => {
+          const badges = screen.getAllByText('skipped')
+          expect(badges.length).toBeGreaterThan(0)
+        })
+      }
+    })
   })
 
   describe('Setup Phases Content', () => {
@@ -451,6 +470,200 @@ describe('FactoryWizardPage', () => {
       const phaseTasksSection = screen.getByText('Phase Tasks:').parentElement
       const tasks = phaseTasksSection?.querySelectorAll('.flex.items-center.gap-2')
       expect(tasks?.length).toBe(4)
+    })
+  })
+
+  describe('State Management', () => {
+    it('shows skipped phase state', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'skipped', logs: ['Phase skipped by user'], completedTasks: 0, totalTasks: 4 }
+      })
+
+      render(<FactoryWizardPage />)
+
+      const badges = screen.getAllByText('skipped')
+      expect(badges.length).toBeGreaterThan(0)
+    })
+
+    it('shows running phase state', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'running', logs: ['Running...'], completedTasks: 2, totalTasks: 4 }
+      })
+
+      render(<FactoryWizardPage />)
+
+      // Check that logs are displayed
+      expect(screen.getByText('Running...')).toBeInTheDocument()
+    })
+
+    it('shows failed phase state', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'failed', logs: ['Failed'], error: 'Test error', completedTasks: 1, totalTasks: 4 }
+      })
+
+      render(<FactoryWizardPage />)
+
+      expect(screen.getByText('Test error')).toBeInTheDocument()
+    })
+
+    it('displays phase logs from saved state', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'completed', logs: ['Log line 1', 'Log line 2'], completedTasks: 4, totalTasks: 4 }
+      })
+
+      render(<FactoryWizardPage />)
+
+      expect(screen.getByText('Log line 1')).toBeInTheDocument()
+      expect(screen.getByText('Log line 2')).toBeInTheDocument()
+    })
+
+    it('calculates progress correctly', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'completed', logs: [], completedTasks: 4, totalTasks: 4 },
+        1: { status: 'completed', logs: [], completedTasks: 4, totalTasks: 4 }
+      })
+
+      render(<FactoryWizardPage />)
+
+      expect(screen.getByText(/2 of 4 phases completed/)).toBeInTheDocument()
+    })
+
+    it('displays approval required state', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'approval_required', logs: ['Needs approval'], completedTasks: 4, totalTasks: 4 }
+      })
+
+      render(<FactoryWizardPage />)
+
+      expect(screen.getByText('Approval Required')).toBeInTheDocument()
+    })
+  })
+
+  describe('Phase Status Display', () => {
+    it('displays correct number of pending phases initially', () => {
+      render(<FactoryWizardPage />)
+
+      const badges = screen.getAllByText('pending')
+      // At least 4 phases should be pending (may show more due to current phase display)
+      expect(badges.length).toBeGreaterThanOrEqual(4)
+    })
+
+    it('displays correct status for multiple phases', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'completed', logs: [], completedTasks: 4, totalTasks: 4 },
+        1: { status: 'running', logs: [], completedTasks: 2, totalTasks: 4 },
+        2: { status: 'failed', logs: [], error: 'Error', completedTasks: 1, totalTasks: 4 },
+        3: { status: 'pending', logs: [], completedTasks: 0, totalTasks: 4 }
+      })
+
+      render(<FactoryWizardPage />)
+
+      expect(screen.getAllByText('completed').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('running').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('failed').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('pending').length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('Error Display', () => {
+    it('shows error message for failed phase', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'failed', logs: [], error: 'Connection timeout', completedTasks: 0, totalTasks: 4 }
+      })
+
+      render(<FactoryWizardPage />)
+
+      expect(screen.getByText('Connection timeout')).toBeInTheDocument()
+    })
+
+    it('shows aborted status', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'failed', logs: ['Execution aborted by user'], error: 'Aborted', completedTasks: 2, totalTasks: 4 }
+      })
+
+      render(<FactoryWizardPage />)
+
+      expect(screen.getByText('Execution aborted by user')).toBeInTheDocument()
+    })
+  })
+
+  describe('Progress Calculation', () => {
+    it('shows 0% when no phases completed', () => {
+      const { container } = render(<FactoryWizardPage />)
+
+      const progress = container.querySelector('[data-value="0"]')
+      expect(progress).toBeInTheDocument()
+    })
+
+    it('shows 25% when 1 of 4 phases completed', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'completed', logs: [], completedTasks: 4, totalTasks: 4 }
+      })
+
+      const { container } = render(<FactoryWizardPage />)
+
+      const progress = container.querySelector('[data-value="25"]')
+      expect(progress).toBeInTheDocument()
+    })
+
+    it('shows 50% when 2 of 4 phases completed', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'completed', logs: [], completedTasks: 4, totalTasks: 4 },
+        1: { status: 'completed', logs: [], completedTasks: 4, totalTasks: 4 }
+      })
+
+      const { container } = render(<FactoryWizardPage />)
+
+      const progress = container.querySelector('[data-value="50"]')
+      expect(progress).toBeInTheDocument()
+    })
+
+    it('shows 100% when all phases completed', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'completed', logs: [], completedTasks: 4, totalTasks: 4 },
+        1: { status: 'completed', logs: [], completedTasks: 4, totalTasks: 4 },
+        2: { status: 'completed', logs: [], completedTasks: 4, totalTasks: 4 },
+        3: { status: 'completed', logs: [], completedTasks: 4, totalTasks: 4 }
+      })
+
+      const { container } = render(<FactoryWizardPage />)
+
+      expect(screen.getByText(/4 of 4 phases completed/)).toBeInTheDocument()
+      const progress = container.querySelector('[data-value="100"]')
+      expect(progress).toBeInTheDocument()
+    })
+  })
+
+  describe('Task Completion Tracking', () => {
+    it('displays task completion count', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'running', logs: [], completedTasks: 2, totalTasks: 4 }
+      })
+
+      render(<FactoryWizardPage />)
+
+      expect(screen.getByText('Tasks: 2/4')).toBeInTheDocument()
+    })
+
+    it('shows task percentage', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'running', logs: [], completedTasks: 3, totalTasks: 4 }
+      })
+
+      render(<FactoryWizardPage />)
+
+      expect(screen.getByText('75%')).toBeInTheDocument()
+    })
+
+    it('displays all tasks completed', () => {
+      localStorageMock['factory-wizard-state'] = JSON.stringify({
+        0: { status: 'completed', logs: [], completedTasks: 4, totalTasks: 4 }
+      })
+
+      render(<FactoryWizardPage />)
+
+      expect(screen.getByText('Tasks: 4/4')).toBeInTheDocument()
+      expect(screen.getByText('100%')).toBeInTheDocument()
     })
   })
 })
