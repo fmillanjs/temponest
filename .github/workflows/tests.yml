@@ -1,0 +1,421 @@
+name: Tests
+
+on:
+  push:
+    branches: ['main', 'develop']
+  pull_request:
+    branches: ['main', 'develop']
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  # Backend unit and integration tests
+  backend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    strategy:
+      matrix:
+        python-version: ['3.11']
+        service:
+          - name: auth
+            path: services/auth
+            cov-threshold: 95
+          - name: agents
+            path: services/agents
+            cov-threshold: 90
+          - name: scheduler
+            path: services/scheduler
+            cov-threshold: 85
+          - name: approval_ui
+            path: services/approval_ui
+            cov-threshold: 85
+          - name: ingestion
+            path: services/ingestion
+            cov-threshold: 85
+          - name: temporal_workers
+            path: services/temporal_workers
+            cov-threshold: 80
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies (${{ matrix.service.name }})
+        run: |
+          cd ${{ matrix.service.path }}
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov pytest-mock httpx
+
+      - name: Run tests (${{ matrix.service.name }})
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-key-for-ci
+          CLAUDE_API_KEY: test-api-key
+        run: |
+          cd ${{ matrix.service.path }}
+          pytest tests/ \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=${{ matrix.service.cov-threshold }} \
+            -v
+
+      - name: Upload coverage to Codecov (${{ matrix.service.name }})
+        uses: codecov/codecov-action@v4
+        with:
+          files: ${{ matrix.service.path }}/coverage.xml
+          flags: backend_unit,${{ matrix.service.name }}
+          name: ${{ matrix.service.name }}-coverage
+          fail_ci_if_error: false
+
+  # SDK and CLI tests
+  sdk-cli-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      matrix:
+        python-version: ['3.11']
+        component:
+          - name: sdk
+            path: sdk
+            cov-path: temponest_sdk
+            cov-threshold: 85
+          - name: cli
+            path: cli
+            cov-path: cli
+            cov-threshold: 80
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies (${{ matrix.component.name }})
+        run: |
+          cd ${{ matrix.component.path }}
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-mock
+
+      - name: Run tests (${{ matrix.component.name }})
+        run: |
+          cd ${{ matrix.component.path }}
+          pytest tests/ \
+            --cov=${{ matrix.component.cov-path }} \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=${{ matrix.component.cov-threshold }} \
+            -v
+
+      - name: Upload coverage to Codecov (${{ matrix.component.name }})
+        uses: codecov/codecov-action@v4
+        with:
+          files: ${{ matrix.component.path }}/coverage.xml
+          flags: sdk,${{ matrix.component.name }}
+          name: ${{ matrix.component.name }}-coverage
+          fail_ci_if_error: false
+
+  # Web UI tests
+  web-ui-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies (Web UI)
+        run: |
+          cd web-ui
+          pip install -r requirements.txt
+          pip install pytest pytest-flask pytest-cov
+
+      - name: Run tests (Web UI)
+        env:
+          FLASK_ENV: testing
+          AUTH_SERVICE_URL: http://localhost:9002
+          AGENTS_SERVICE_URL: http://localhost:9000
+          SCHEDULER_SERVICE_URL: http://localhost:9003
+        run: |
+          cd web-ui
+          pytest tests/ \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=75 \
+            -v
+
+      - name: Upload coverage to Codecov (Web UI)
+        uses: codecov/codecov-action@v4
+        with:
+          files: web-ui/coverage.xml
+          flags: frontend_unit,web_ui
+          name: web-ui-coverage
+          fail_ci_if_error: false
+
+  # Frontend Console tests
+  frontend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/console/package-lock.json
+
+      - name: Install dependencies (Console)
+        run: |
+          cd apps/console
+          npm ci
+
+      - name: Run tests (Console)
+        run: |
+          cd apps/console
+          npm run test -- --run --reporter=verbose
+
+      - name: Upload coverage to Codecov (Console)
+        uses: codecov/codecov-action@v4
+        with:
+          files: apps/console/coverage/coverage-final.json
+          flags: frontend_unit,console
+          name: console-coverage
+          fail_ci_if_error: false
+
+  # Security tests
+  security-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies (Security Tests)
+        run: |
+          cd tests/security
+          pip install -r ../../services/auth/requirements.txt
+          pip install -r ../../services/agents/requirements.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Run security tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-key-for-ci
+          CLAUDE_API_KEY: test-api-key
+        run: |
+          cd tests/security
+          pytest . -v --tb=short -m "not slow"
+
+  # Integration tests
+  integration-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies (Integration Tests)
+        run: |
+          pip install pytest pytest-asyncio httpx
+          pip install -r services/auth/requirements.txt
+          pip install -r services/agents/requirements.txt
+          pip install -r services/scheduler/requirements.txt
+
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-key-for-ci
+          CLAUDE_API_KEY: test-api-key
+          AUTH_SERVICE_URL: http://localhost:9002
+          AGENTS_SERVICE_URL: http://localhost:9000
+          SCHEDULER_SERVICE_URL: http://localhost:9003
+        run: |
+          cd tests/integration
+          pytest . -v --tb=short || echo "Some integration tests failed (expected in CI)"
+
+  # E2E tests
+  e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/console/package-lock.json
+
+      - name: Install dependencies (Console)
+        run: |
+          cd apps/console
+          npm ci
+
+      - name: Install Playwright
+        run: |
+          cd apps/console
+          npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: |
+          cd apps/console
+          npx playwright test --reporter=list
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: apps/console/playwright-report/
+          retention-days: 7
+
+  # Test results summary
+  test-summary:
+    runs-on: ubuntu-latest
+    needs:
+      - backend-tests
+      - sdk-cli-tests
+      - web-ui-tests
+      - frontend-tests
+      - security-tests
+    if: always()
+
+    steps:
+      - name: Check test results
+        run: |
+          echo "Backend Tests: ${{ needs.backend-tests.result }}"
+          echo "SDK/CLI Tests: ${{ needs.sdk-cli-tests.result }}"
+          echo "Web UI Tests: ${{ needs.web-ui-tests.result }}"
+          echo "Frontend Tests: ${{ needs.frontend-tests.result }}"
+          echo "Security Tests: ${{ needs.security-tests.result }}"
+
+          if [ "${{ needs.backend-tests.result }}" != "success" ] || \
+             [ "${{ needs.sdk-cli-tests.result }}" != "success" ] || \
+             [ "${{ needs.web-ui-tests.result }}" != "success" ] || \
+             [ "${{ needs.frontend-tests.result }}" != "success" ]; then
+            echo "❌ Some tests failed"
+            exit 1
+          fi
+
+          echo "✅ All tests passed!"

@@ -1,0 +1,180 @@
+# Codecov Configuration
+# https://docs.codecov.com/docs/codecov-yaml
+
+codecov:
+  require_ci_to_pass: yes
+  notify:
+    wait_for_ci: yes
+
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+
+  status:
+    project:
+      default:
+        target: 85%           # Overall project target
+        threshold: 1%         # Allow 1% decrease
+        informational: false  # Fail if below target
+        only_pulls: false
+
+    patch:
+      default:
+        target: 100%          # New code must be 100% covered
+        threshold: 0%         # No decrease allowed
+        informational: false
+        only_pulls: true
+
+    # Individual component targets
+    components:
+      - component_id: auth_service
+        name: "Auth Service"
+        paths:
+          - services/auth/app/**
+        target: 95%
+        threshold: 1%
+
+      - component_id: agents_service
+        name: "Agents Service"
+        paths:
+          - services/agents/app/**
+        target: 90%
+        threshold: 1%
+
+      - component_id: scheduler_service
+        name: "Scheduler Service"
+        paths:
+          - services/scheduler/**
+        target: 85%
+        threshold: 1%
+
+      - component_id: approval_ui
+        name: "Approval UI Service"
+        paths:
+          - services/approval_ui/**
+        target: 85%
+        threshold: 1%
+
+      - component_id: ingestion_service
+        name: "Ingestion Service"
+        paths:
+          - services/ingestion/**
+        target: 85%
+        threshold: 1%
+
+      - component_id: temporal_workers
+        name: "Temporal Workers"
+        paths:
+          - services/temporal_workers/**
+        target: 80%
+        threshold: 1%
+
+      - component_id: console
+        name: "Console Frontend"
+        paths:
+          - apps/console/**
+        target: 75%
+        threshold: 1%
+
+      - component_id: web_ui
+        name: "Web UI"
+        paths:
+          - web-ui/**
+        target: 75%
+        threshold: 1%
+
+      - component_id: sdk
+        name: "Python SDK"
+        paths:
+          - sdk/temponest_sdk/**
+        target: 85%
+        threshold: 1%
+
+      - component_id: cli
+        name: "CLI Tool"
+        paths:
+          - cli/cli.py
+        target: 80%
+        threshold: 1%
+
+comment:
+  layout: "reach,diff,flags,tree,files"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+  hide_project_coverage: false
+  show_carryforward_flags: true
+
+ignore:
+  - "**/__pycache__"
+  - "**/node_modules"
+  - "**/tests/**"
+  - "**/test_*.py"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/conftest.py"
+  - "**/migrations/**"
+  - "**/scripts/**"
+  - "**/__main__.py"
+  - "**/setup.py"
+  - "**/.next/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/coverage/**"
+  - "**/htmlcov/**"
+  - "**/*.config.js"
+  - "**/*.config.ts"
+
+# Flags for different test types
+flags:
+  backend_unit:
+    paths:
+      - services/
+    carryforward: true
+    assume:
+      branches:
+        - main
+
+  backend_integration:
+    paths:
+      - tests/integration/
+    carryforward: true
+
+  frontend_unit:
+    paths:
+      - apps/console/
+      - web-ui/
+    carryforward: true
+
+  sdk:
+    paths:
+      - sdk/
+    carryforward: true
+
+  cli:
+    paths:
+      - cli/
+    carryforward: true
+
+  security:
+    paths:
+      - services/
+    carryforward: true
+
+# Ignore changes in these paths for coverage decrease
+ignore_paths:
+  - "docs/"
+  - "scripts/"
+  - "docker/"
+  - ".github/"
+  - "*.md"
+  - "LICENSE"
+
+# Pull request comments
+pull_request_settings:
+  annotations: true
+  require_changes: true
+  require_base: false
+  require_head: true
