@@ -256,7 +256,7 @@ class TestAgentsClientExecuteStream:
             "data: [DONE]"
         ]
 
-        with patch('temponest_sdk.agents.httpx.stream') as mock_stream:
+        with patch('httpx.stream') as mock_stream:
             mock_stream.return_value.__enter__.return_value = mock_response
 
             client = BaseClient(base_url="http://test.com")
@@ -272,7 +272,7 @@ class TestAgentsClientExecuteStream:
         mock_response.status_code = 404
         mock_response.json.return_value = {"detail": "Not found"}
 
-        with patch('temponest_sdk.agents.httpx.stream') as mock_stream:
+        with patch('httpx.stream') as mock_stream:
             mock_stream.return_value.__enter__.return_value = mock_response
 
             client = BaseClient(base_url="http://test.com")

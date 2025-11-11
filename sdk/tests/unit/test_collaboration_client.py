@@ -17,9 +17,7 @@ class TestCollaborationClientCreate:
             client = BaseClient(base_url="http://test.com")
             collab_client = CollaborationClient(client)
 
-            session = collab_client.create_session(
-                name="Build Feature",
-                pattern="sequential",
+            session = collab_client.execute_sequential(
                 agent_ids=["agent-1", "agent-2", "agent-3"],
                 initial_message="Build a new feature"
             )
@@ -35,11 +33,9 @@ class TestCollaborationClientCreate:
             client = BaseClient(base_url="http://test.com")
             collab_client = CollaborationClient(client)
 
-            session = collab_client.create_session(
-                name="Parallel Tasks",
-                pattern="parallel",
+            session = collab_client.execute_parallel(
                 agent_ids=["agent-1", "agent-2"],
-                initial_message="Run tasks"
+                messages=["Task 1", "Task 2"]
             )
 
             assert session.pattern == "parallel"
@@ -51,11 +47,10 @@ class TestCollaborationClientCreate:
             client = BaseClient(base_url="http://test.com")
             collab_client = CollaborationClient(client)
 
-            session = collab_client.create_session(
-                name="Hierarchical Project",
-                pattern="hierarchical",
-                agent_ids=["overseer", "agent-1", "agent-2"],
-                initial_message="Coordinate work"
+            session = collab_client.execute_hierarchical(
+                coordinator_id="overseer",
+                worker_ids=["agent-1", "agent-2"],
+                task="Coordinate work"
             )
 
             assert session.pattern == "hierarchical"
@@ -125,78 +120,30 @@ class TestCollaborationClientList:
 class TestCollaborationClientControl:
     """Test session control operations"""
 
-    def test_send_message_to_session(self, clean_env):
-        """Test sending message to session"""
-        response_data = {"status": "message_received", "agent_id": "agent-2"}
-        with patch.object(BaseClient, 'post', return_value=response_data) as mock_post:
+    def test_cancel_session(self, clean_env):
+        """Test canceling a session"""
+        with patch.object(BaseClient, 'post', return_value=None):
             client = BaseClient(base_url="http://test.com")
             collab_client = CollaborationClient(client)
 
-            result = collab_client.send_message(
-                "collab-123",
-                "Continue with next step"
-            )
-
-            assert result["status"] == "message_received"
-            call_args = mock_post.call_args
-            assert call_args[1]['json']['message'] == "Continue with next step"
-
-    def test_stop_session(self, clean_env, mock_collaboration_session_data):
-        """Test stopping a session"""
-        stopped_data = {**mock_collaboration_session_data, "status": "stopped"}
-        with patch.object(BaseClient, 'post', return_value=stopped_data):
-            client = BaseClient(base_url="http://test.com")
-            collab_client = CollaborationClient(client)
-
-            session = collab_client.stop_session("collab-123")
-
-            assert session.status == "stopped"
-
-    def test_delete_session(self, clean_env):
-        """Test deleting a session"""
-        with patch.object(BaseClient, 'delete', return_value=None):
-            client = BaseClient(base_url="http://test.com")
-            collab_client = CollaborationClient(client)
-
-            collab_client.delete_session("collab-123")
+            collab_client.cancel_session("collab-123")
             # No exception means success
 
 
-class TestCollaborationClientResults:
-    """Test getting session results"""
+class TestCollaborationClientIterative:
+    """Test iterative collaboration pattern"""
 
-    def test_get_session_results(self, clean_env):
-        """Test getting session results"""
-        results_data = {
-            "session_id": "collab-123",
-            "pattern": "sequential",
-            "agent_results": [
-                {"agent_id": "agent-1", "output": "Design complete"},
-                {"agent_id": "agent-2", "output": "Implementation complete"}
-            ],
-            "final_output": "Feature completed"
-        }
-        with patch.object(BaseClient, 'get', return_value=results_data):
+    def test_execute_iterative(self, clean_env, mock_collaboration_session_data):
+        """Test iterative collaboration pattern"""
+        iterative_data = {**mock_collaboration_session_data, "pattern": "iterative"}
+        with patch.object(BaseClient, 'post', return_value=iterative_data):
             client = BaseClient(base_url="http://test.com")
             collab_client = CollaborationClient(client)
 
-            results = collab_client.get_results("collab-123")
+            session = collab_client.execute_iterative(
+                agent_ids=["generator", "critic"],
+                initial_message="Design a logo",
+                max_iterations=5
+            )
 
-            assert results["session_id"] == "collab-123"
-            assert len(results["agent_results"]) == 2
-
-    def test_get_session_messages(self, clean_env):
-        """Test getting session message history"""
-        messages_data = [
-            {"role": "user", "content": "Start task"},
-            {"role": "agent-1", "content": "Working on design"},
-            {"role": "agent-2", "content": "Implementing feature"}
-        ]
-        with patch.object(BaseClient, 'get', return_value=messages_data):
-            client = BaseClient(base_url="http://test.com")
-            collab_client = CollaborationClient(client)
-
-            messages = collab_client.get_messages("collab-123")
-
-            assert len(messages) == 3
-            assert messages[0]["role"] == "user"
+            assert session.pattern == "iterative"

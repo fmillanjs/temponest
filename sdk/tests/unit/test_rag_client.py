@@ -82,6 +82,21 @@ class TestRAGClientCollections:
             call_args = mock_get.call_args
             assert call_args[1]['params']['search'] == "docs"
 
+    def test_update_collection(self, clean_env, mock_collection_data):
+        """Test updating collection"""
+        updated_data = {**mock_collection_data, "name": "Updated Collection"}
+        with patch.object(BaseClient, 'patch', return_value=updated_data):
+            client = BaseClient(base_url="http://test.com")
+            rag_client = RAGClient(client)
+
+            collection = rag_client.update_collection(
+                "collection-123",
+                name="Updated Collection",
+                description="New description"
+            )
+
+            assert collection.name == "Updated Collection"
+
     def test_delete_collection(self, clean_env):
         """Test deleting collection"""
         with patch.object(BaseClient, 'delete', return_value=None):
@@ -91,19 +106,36 @@ class TestRAGClientCollections:
             rag_client.delete_collection("collection-123")
             # No exception means success
 
+    def test_upload_documents(self, clean_env, mock_document_data):
+        """Test uploading multiple documents"""
+        with patch('builtins.open', create=True), \
+             patch('pathlib.Path.exists', return_value=True), \
+             patch.object(BaseClient, 'post', return_value=mock_document_data):
+            client = BaseClient(base_url="http://test.com")
+            rag_client = RAGClient(client)
+
+            documents = rag_client.upload_documents(
+                collection_id="collection-123",
+                file_paths=["/tmp/file1.txt", "/tmp/file2.txt"]
+            )
+
+            assert len(documents) == 2
+
 
 class TestRAGClientDocuments:
     """Test document management"""
 
     def test_add_document_text(self, clean_env, mock_document_data):
-        """Test adding document from text"""
-        with patch.object(BaseClient, 'post', return_value=mock_document_data):
+        """Test uploading document from file path"""
+        with patch('builtins.open', create=True), \
+             patch('pathlib.Path.exists', return_value=True), \
+             patch.object(BaseClient, 'post', return_value=mock_document_data):
             client = BaseClient(base_url="http://test.com")
             rag_client = RAGClient(client)
 
-            document = rag_client.add_document(
+            document = rag_client.upload_document(
                 collection_id="collection-123",
-                content="Test content",
+                file_path="/tmp/test.txt",
                 metadata={"source": "test"}
             )
 
@@ -111,17 +143,16 @@ class TestRAGClientDocuments:
             assert document.id == "doc-123"
 
     def test_add_document_file(self, clean_env, mock_document_data):
-        """Test adding document from file"""
-        with patch.object(BaseClient, 'post', return_value=mock_document_data):
+        """Test uploading document with metadata"""
+        with patch('builtins.open', create=True), \
+             patch('pathlib.Path.exists', return_value=True), \
+             patch.object(BaseClient, 'post', return_value=mock_document_data):
             client = BaseClient(base_url="http://test.com")
             rag_client = RAGClient(client)
 
-            # Mock file object
-            mock_file = Mock()
             document = rag_client.upload_document(
                 collection_id="collection-123",
-                file=mock_file,
-                filename="test.txt"
+                file_path="/tmp/test.pdf"
             )
 
             assert document.id == "doc-123"
@@ -200,8 +231,8 @@ class TestRAGClientQuery:
             result = rag_client.query(
                 collection_id="collection-123",
                 query="How to install?",
-                filters={"category": "guide"}
+                filter={"category": "guide"}
             )
 
             call_args = mock_post.call_args
-            assert call_args[1]['json']['filters'] == {"category": "guide"}
+            assert call_args[1]['json']['filter'] == {"category": "guide"}

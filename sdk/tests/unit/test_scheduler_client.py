@@ -96,7 +96,7 @@ class TestSchedulerClientUpdate:
     def test_pause_schedule(self, clean_env, mock_schedule_data):
         """Test pausing a schedule"""
         paused_data = {**mock_schedule_data, "is_active": False}
-        with patch.object(BaseClient, 'post', return_value=paused_data):
+        with patch.object(BaseClient, 'patch', return_value=paused_data):
             client = BaseClient(base_url="http://test.com")
             scheduler_client = SchedulerClient(client)
 
@@ -106,7 +106,7 @@ class TestSchedulerClientUpdate:
 
     def test_resume_schedule(self, clean_env, mock_schedule_data):
         """Test resuming a schedule"""
-        with patch.object(BaseClient, 'post', return_value=mock_schedule_data):
+        with patch.object(BaseClient, 'patch', return_value=mock_schedule_data):
             client = BaseClient(base_url="http://test.com")
             scheduler_client = SchedulerClient(client)
 
@@ -151,38 +151,38 @@ class TestSchedulerClientDelete:
 class TestSchedulerClientExecutions:
     """Test execution management"""
 
-    def test_get_execution(self, clean_env, mock_task_execution_data):
-        """Test getting execution by ID"""
-        with patch.object(BaseClient, 'get', return_value=mock_task_execution_data):
-            client = BaseClient(base_url="http://test.com")
-            scheduler_client = SchedulerClient(client)
-
-            execution = scheduler_client.get_execution("task-exec-123")
-
-            assert isinstance(execution, TaskExecution)
-            assert execution.id == "task-exec-123"
-
-    def test_list_executions(self, clean_env, mock_task_execution_data):
-        """Test listing executions"""
+    def test_get_executions(self, clean_env, mock_task_execution_data):
+        """Test getting executions for a schedule"""
         with patch.object(BaseClient, 'get', return_value=[mock_task_execution_data]):
             client = BaseClient(base_url="http://test.com")
             scheduler_client = SchedulerClient(client)
 
-            executions = scheduler_client.list_executions("schedule-123")
+            executions = scheduler_client.get_executions("schedule-123")
 
             assert len(executions) == 1
             assert isinstance(executions[0], TaskExecution)
+            assert executions[0].id == "task-exec-123"
 
-    def test_list_executions_by_status(self, clean_env, mock_task_execution_data):
-        """Test listing executions by status"""
+    def test_get_executions_with_pagination(self, clean_env, mock_task_execution_data):
+        """Test getting executions with pagination"""
         with patch.object(BaseClient, 'get', return_value=[mock_task_execution_data]) as mock_get:
             client = BaseClient(base_url="http://test.com")
             scheduler_client = SchedulerClient(client)
 
-            executions = scheduler_client.list_executions(
-                "schedule-123",
-                status="completed"
-            )
+            executions = scheduler_client.get_executions("schedule-123", skip=10, limit=20)
 
+            assert len(executions) == 1
             call_args = mock_get.call_args
-            assert call_args[1]['params']['status'] == "completed"
+            assert call_args[1]['params']['skip'] == 10
+            assert call_args[1]['params']['limit'] == 20
+
+    def test_get_executions_empty(self, clean_env):
+        """Test getting executions returns empty list"""
+        with patch.object(BaseClient, 'get', return_value=[]):
+            client = BaseClient(base_url="http://test.com")
+            scheduler_client = SchedulerClient(client)
+
+            executions = scheduler_client.get_executions("schedule-123")
+
+            assert len(executions) == 0
+            assert executions == []

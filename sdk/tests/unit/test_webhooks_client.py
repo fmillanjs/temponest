@@ -17,6 +17,7 @@ class TestWebhooksClientCreate:
             webhooks_client = WebhooksClient(client)
 
             webhook = webhooks_client.create(
+                name="Test Webhook",
                 url="https://example.com/webhook",
                 events=["agent.execution.completed", "agent.execution.failed"],
                 secret="webhook-secret"
@@ -34,6 +35,7 @@ class TestWebhooksClientCreate:
             webhooks_client = WebhooksClient(client)
 
             webhook = webhooks_client.create(
+                name="Minimal Webhook",
                 url="https://example.com/webhook",
                 events=["agent.execution.completed"]
             )
@@ -126,7 +128,7 @@ class TestWebhooksClientUpdate:
 
     def test_activate_webhook(self, clean_env, mock_webhook_data):
         """Test activating webhook"""
-        with patch.object(BaseClient, 'post', return_value=mock_webhook_data):
+        with patch.object(BaseClient, 'patch', return_value=mock_webhook_data):
             client = BaseClient(base_url="http://test.com")
             webhooks_client = WebhooksClient(client)
 
@@ -137,7 +139,7 @@ class TestWebhooksClientUpdate:
     def test_deactivate_webhook(self, clean_env, mock_webhook_data):
         """Test deactivating webhook"""
         deactivated_data = {**mock_webhook_data, "is_active": False}
-        with patch.object(BaseClient, 'post', return_value=deactivated_data):
+        with patch.object(BaseClient, 'patch', return_value=deactivated_data):
             client = BaseClient(base_url="http://test.com")
             webhooks_client = WebhooksClient(client)
 
@@ -168,7 +170,7 @@ class TestWebhooksClientDeliveries:
             client = BaseClient(base_url="http://test.com")
             webhooks_client = WebhooksClient(client)
 
-            deliveries = webhooks_client.list_deliveries("webhook-123")
+            deliveries = webhooks_client.get_deliveries("webhook-123")
 
             assert len(deliveries) == 1
             assert isinstance(deliveries[0], WebhookDelivery)
@@ -180,7 +182,7 @@ class TestWebhooksClientDeliveries:
             client = BaseClient(base_url="http://test.com")
             webhooks_client = WebhooksClient(client)
 
-            deliveries = webhooks_client.list_deliveries(
+            deliveries = webhooks_client.get_deliveries(
                 "webhook-123",
                 status="delivered"
             )
@@ -201,7 +203,7 @@ class TestWebhooksClientDeliveries:
 
     def test_retry_delivery(self, clean_env, mock_webhook_delivery_data):
         """Test retrying failed delivery"""
-        retry_data = {**mock_webhook_delivery_data, "attempt": 2}
+        retry_data = {**mock_webhook_delivery_data, "attempt_count": 2}
         with patch.object(BaseClient, 'post', return_value=retry_data):
             client = BaseClient(base_url="http://test.com")
             webhooks_client = WebhooksClient(client)
@@ -209,3 +211,30 @@ class TestWebhooksClientDeliveries:
             delivery = webhooks_client.retry_delivery("delivery-123")
 
             assert delivery.attempt_count == 2
+
+    def test_test_webhook(self, clean_env, mock_webhook_delivery_data):
+        """Test sending a test webhook"""
+        with patch.object(BaseClient, 'post', return_value=mock_webhook_delivery_data):
+            client = BaseClient(base_url="http://test.com")
+            webhooks_client = WebhooksClient(client)
+
+            delivery = webhooks_client.test("webhook-123")
+
+            assert isinstance(delivery, WebhookDelivery)
+            assert delivery.webhook_id == "webhook-123"
+
+    def test_get_events(self, clean_env):
+        """Test getting available webhook events"""
+        events = [
+            "agent.execution.started",
+            "agent.execution.completed",
+            "agent.execution.failed"
+        ]
+        with patch.object(BaseClient, 'get', return_value=events):
+            client = BaseClient(base_url="http://test.com")
+            webhooks_client = WebhooksClient(client)
+
+            result = webhooks_client.get_events()
+
+            assert len(result) == 3
+            assert "agent.execution.completed" in result

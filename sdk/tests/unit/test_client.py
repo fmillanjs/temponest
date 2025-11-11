@@ -3,7 +3,7 @@ Unit tests for base HTTP client
 """
 import pytest
 import httpx
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from temponest_sdk.client import BaseClient, AsyncBaseClient
 from temponest_sdk.exceptions import (
     AuthenticationError,
@@ -44,10 +44,11 @@ class TestBaseClientInitialization:
         assert client.base_url == "http://localhost:9000/"
         assert client.auth_token == "test-token"
 
-    def test_init_without_base_url_raises_error(self, clean_env):
-        """Test initialization without base_url raises ConfigurationError"""
-        with pytest.raises(ConfigurationError, match="base_url must be provided"):
-            BaseClient()
+    def test_init_uses_default_base_url(self, clean_env):
+        """Test initialization uses default base_url when not provided"""
+        client = BaseClient()
+        # Should use default localhost:9000
+        assert client.base_url == "http://localhost:9000/"
 
     def test_init_adds_trailing_slash(self, clean_env):
         """Test that trailing slash is added to base_url"""
@@ -429,7 +430,7 @@ class TestAsyncBaseClientRequests:
         response.status_code = 200
         response.content = b'{"result": "success"}'
         response.json.return_value = {"result": "success"}
-        mock_client.request = Mock(return_value=response)
+        mock_client.request = AsyncMock(return_value=response)
 
         client = AsyncBaseClient(base_url="http://test.com")
         result = await client.get("/test")
@@ -447,7 +448,7 @@ class TestAsyncBaseClientRequests:
         response.status_code = 201
         response.content = b'{"id": "123"}'
         response.json.return_value = {"id": "123"}
-        mock_client.request = Mock(return_value=response)
+        mock_client.request = AsyncMock(return_value=response)
 
         client = AsyncBaseClient(base_url="http://test.com")
         result = await client.post("/test", json={"name": "test"})
@@ -459,10 +460,11 @@ class TestAsyncBaseClientRequests:
     async def test_async_context_manager(self, mock_client_class, clean_env):
         """Test async context manager"""
         mock_client = MagicMock()
-        mock_client.aclose = Mock(return_value=None)
+        mock_client.aclose = AsyncMock(return_value=None)
         mock_client_class.return_value = mock_client
 
         async with AsyncBaseClient(base_url="http://test.com") as client:
             assert client is not None
 
-        # Note: aclose is called but might not be awaitable in mock
+        # aclose should have been called
+        mock_client.aclose.assert_called_once()

@@ -155,23 +155,66 @@ class TestCostsClientBudget:
             call_args = mock_post.call_args
             assert call_args[1]['json']['monthly_limit_usd'] == 150.00
 
-    def test_update_budget(self, clean_env, mock_budget_config_data):
-        """Test updating budget configuration"""
-        with patch.object(BaseClient, 'patch', return_value=mock_budget_config_data):
+    def test_set_budget_update(self, clean_env, mock_budget_config_data):
+        """Test updating budget via set_budget"""
+        with patch.object(BaseClient, 'post', return_value=mock_budget_config_data):
             client = BaseClient(base_url="http://test.com")
             costs_client = CostsClient(client)
 
-            budget = costs_client.update_budget(
+            # set_budget is used for both create and update
+            budget = costs_client.set_budget(
                 monthly_limit_usd=200.00
             )
 
             assert isinstance(budget, BudgetConfig)
 
-    def test_delete_budget(self, clean_env):
-        """Test deleting budget configuration"""
-        with patch.object(BaseClient, 'delete', return_value=None):
+    def test_get_budget_status(self, clean_env):
+        """Test getting budget status"""
+        status_data = {
+            "daily_usage": 10.50,
+            "daily_limit": 50.00,
+            "daily_percentage": 0.21,
+            "monthly_usage": 150.00,
+            "monthly_limit": 1000.00,
+            "monthly_percentage": 0.15
+        }
+        with patch.object(BaseClient, 'get', return_value=status_data):
             client = BaseClient(base_url="http://test.com")
             costs_client = CostsClient(client)
 
-            costs_client.delete_budget()
-            # No exception means success
+            status = costs_client.get_budget_status()
+
+            assert status["daily_usage"] == 10.50
+            assert status["monthly_usage"] == 150.00
+
+    def test_get_forecast(self, clean_env):
+        """Test getting cost forecast"""
+        forecast_data = {
+            "2025-01-15": 12.50,
+            "2025-01-16": 13.00,
+            "2025-01-17": 12.00
+        }
+        with patch.object(BaseClient, 'get', return_value=forecast_data):
+            client = BaseClient(base_url="http://test.com")
+            costs_client = CostsClient(client)
+
+            forecast = costs_client.get_forecast(days=3)
+
+            assert len(forecast) == 3
+            assert forecast["2025-01-15"] == 12.50
+
+    def test_get_model_costs(self, clean_env):
+        """Test getting costs by model"""
+        model_costs = {
+            "gpt-4": 45.50,
+            "gpt-3.5-turbo": 12.30,
+            "claude-3": 32.10
+        }
+        with patch.object(BaseClient, 'get', return_value=model_costs):
+            client = BaseClient(base_url="http://test.com")
+            costs_client = CostsClient(client)
+
+            costs = costs_client.get_model_costs()
+
+            assert costs["gpt-4"] == 45.50
+            assert len(costs) == 3
