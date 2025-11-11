@@ -11,18 +11,24 @@ vi.mock('@/lib/db/client', () => ({
   },
 }))
 
+// Store the onStatusChange callback for testing
+let capturedOnStatusChange: any = null
+
 // Mock the KanbanBoard component
 vi.mock('@/components/KanbanBoard', () => ({
-  KanbanBoard: ({ projects, onStatusChange }: any) => (
-    <div data-testid="kanban-board">
-      <div data-testid="projects-count">{projects.length}</div>
-      {projects.map((project: any) => (
-        <div key={project.id} data-testid={`project-${project.id}`}>
-          {project.name}
-        </div>
-      ))}
-    </div>
-  ),
+  KanbanBoard: ({ projects, onStatusChange }: any) => {
+    capturedOnStatusChange = onStatusChange
+    return (
+      <div data-testid="kanban-board">
+        <div data-testid="projects-count">{projects.length}</div>
+        {projects.map((project: any) => (
+          <div key={project.id} data-testid={`project-${project.id}`}>
+            {project.name}
+          </div>
+        ))}
+      </div>
+    )
+  },
 }))
 
 // Mock next/cache
@@ -32,11 +38,18 @@ vi.mock('next/cache', () => ({
 
 describe('WorkflowsPage', () => {
   let prisma: any
+  let revalidatePath: any
 
   beforeEach(async () => {
     const imported = await import('@/lib/db/client')
+    const cacheImported = await import('next/cache')
     prisma = imported.prisma
+    revalidatePath = cacheImported.revalidatePath
+    capturedOnStatusChange = null
     vi.clearAllMocks()
+
+    // Add default mock for project.update
+    prisma.project.update = vi.fn().mockResolvedValue({})
   })
 
   describe('Rendering', () => {
@@ -317,6 +330,90 @@ describe('WorkflowsPage', () => {
           orderBy: { updatedAt: 'desc' },
         })
       )
+    })
+  })
+
+  describe('Error Handling', () => {
+    it('handles database errors gracefully', async () => {
+      vi.mocked(prisma.project.findMany).mockRejectedValue(new Error('Database connection failed'))
+
+      await expect(WorkflowsPage()).rejects.toThrow('Database connection failed')
+    })
+
+    it('handles empty database results', async () => {
+      vi.mocked(prisma.project.findMany).mockResolvedValue([])
+
+      const page = await WorkflowsPage()
+      render(page)
+
+      expect(screen.getByTestId('projects-count')).toHaveTextContent('0')
+    })
+  })
+
+  describe('Server Actions', () => {
+    it('renders page with server action callback', async () => {
+      vi.mocked(prisma.project.findMany).mockResolvedValue([])
+
+      const page = await WorkflowsPage()
+      render(page)
+
+      // Verify the KanbanBoard receives the callback
+      expect(screen.getByTestId('kanban-board')).toBeInTheDocument()
+      expect(capturedOnStatusChange).toBeDefined()
+    })
+
+    it('updateProjectStatus updates project in database', async () => {
+      vi.mocked(prisma.project.findMany).mockResolvedValue([])
+
+      const page = await WorkflowsPage()
+      render(page)
+
+      // Call the captured server action
+      await capturedOnStatusChange('project-123', 'build')
+
+      expect(prisma.project.update).toHaveBeenCalledWith({
+        where: { id: 'project-123' },
+        data: { status: 'build' },
+      })
+    })
+
+    it('updateProjectStatus revalidates the path', async () => {
+      vi.mocked(prisma.project.findMany).mockResolvedValue([])
+
+      const page = await WorkflowsPage()
+      render(page)
+
+      // Call the captured server action
+      await capturedOnStatusChange('project-456', 'qa')
+
+      expect(revalidatePath).toHaveBeenCalledWith('/workflows')
+    })
+
+    it('updateProjectStatus handles different status values', async () => {
+      vi.mocked(prisma.project.findMany).mockResolvedValue([])
+
+      const page = await WorkflowsPage()
+      render(page)
+
+      const statuses = ['idle', 'research', 'build', 'qa', 'deploy', 'live']
+
+      for (const status of statuses) {
+        await capturedOnStatusChange('project-test', status)
+        expect(prisma.project.update).toHaveBeenCalledWith({
+          where: { id: 'project-test' },
+          data: { status },
+        })
+      }
+    })
+
+    it('updateProjectStatus handles database errors', async () => {
+      vi.mocked(prisma.project.findMany).mockResolvedValue([])
+      prisma.project.update.mockRejectedValue(new Error('Database update failed'))
+
+      const page = await WorkflowsPage()
+      render(page)
+
+      await expect(capturedOnStatusChange('project-999', 'build')).rejects.toThrow('Database update failed')
     })
   })
 })
