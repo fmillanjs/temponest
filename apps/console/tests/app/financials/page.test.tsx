@@ -22,14 +22,6 @@ describe('FinancialsPage', () => {
     global.fetch = vi.fn()
     global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
     global.URL.revokeObjectURL = vi.fn()
-
-    // Mock document.createElement for download links
-    const mockAnchor = document.createElement('a')
-    mockAnchor.click = vi.fn()
-    vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
-      if (tagName === 'a') return mockAnchor
-      return document.createElement(tagName)
-    })
   })
 
   describe('Rendering', () => {
@@ -116,10 +108,13 @@ describe('FinancialsPage', () => {
     it('shows running state when calculation starts', async () => {
       const user = userEvent.setup()
 
-      // Mock streaming response
+      // Mock streaming response with delayed read to allow state update
+      let resolveRead: (value: any) => void
+      const readPromise = new Promise(resolve => { resolveRead = resolve })
+
       const mockReader = {
         read: vi.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('Test output\n') })
+          .mockReturnValueOnce(readPromise)
           .mockResolvedValueOnce({ done: true, value: undefined }),
       }
 
@@ -135,9 +130,13 @@ describe('FinancialsPage', () => {
       const button = screen.getByText('Run Calculation')
       await user.click(button)
 
+      // Check for running state
       await waitFor(() => {
         expect(screen.getByText('Running...')).toBeInTheDocument()
       })
+
+      // Complete the read
+      resolveRead!({ done: false, value: new TextEncoder().encode('Test output\n') })
     })
 
     it('calls API with correct model', async () => {

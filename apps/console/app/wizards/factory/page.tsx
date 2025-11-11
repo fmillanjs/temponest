@@ -414,15 +414,15 @@ export default function FactoryWizardPage() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Factory Name</label>
-              <Input {...form.register('factoryName')} placeholder="SaaS-Empire-Factory" />
+              <label htmlFor="factoryName" className="block text-sm font-medium text-slate-700 mb-1">Factory Name</label>
+              <Input id="factoryName" {...form.register('factoryName')} placeholder="SaaS-Empire-Factory" />
               {form.formState.errors.factoryName && (
                 <p className="text-sm text-rose-600 mt-1">{form.formState.errors.factoryName.message}</p>
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">GitHub Organization</label>
-              <Input {...form.register('githubOrg')} placeholder="your-org" />
+              <label htmlFor="githubOrg" className="block text-sm font-medium text-slate-700 mb-1">GitHub Organization</label>
+              <Input id="githubOrg" {...form.register('githubOrg')} placeholder="your-org" />
               {form.formState.errors.githubOrg && (
                 <p className="text-sm text-rose-600 mt-1">{form.formState.errors.githubOrg.message}</p>
               )}
@@ -430,15 +430,16 @@ export default function FactoryWizardPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Coolify URL</label>
-              <Input {...form.register('coolifyUrl')} placeholder="https://coolify.yourdomain.com" />
+              <label htmlFor="coolifyUrl" className="block text-sm font-medium text-slate-700 mb-1">Coolify URL</label>
+              <Input id="coolifyUrl" {...form.register('coolifyUrl')} placeholder="https://coolify.yourdomain.com" />
               {form.formState.errors.coolifyUrl && (
                 <p className="text-sm text-rose-600 mt-1">{form.formState.errors.coolifyUrl.message}</p>
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Agent Count</label>
+              <label htmlFor="agentCount" className="block text-sm font-medium text-slate-700 mb-1">Agent Count</label>
               <Input
+                id="agentCount"
                 type="number"
                 {...form.register('agentCount', { valueAsNumber: true })}
                 placeholder="7"
@@ -451,8 +452,8 @@ export default function FactoryWizardPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Working Directory</label>
-            <Input {...form.register('workdir')} placeholder="/home/doctor/temponest" />
+            <label htmlFor="workdir" className="block text-sm font-medium text-slate-700 mb-1">Working Directory</label>
+            <Input id="workdir" {...form.register('workdir')} placeholder="/home/doctor/temponest" />
             {form.formState.errors.workdir && (
               <p className="text-sm text-rose-600 mt-1">{form.formState.errors.workdir.message}</p>
             )}

@@ -297,22 +297,22 @@ export default function SingleSaasWizardPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Project Name</label>
-            <Input {...form.register('projectName')} placeholder="my-saas-project" />
+            <label htmlFor="projectName" className="block text-sm font-medium text-slate-700 mb-1">Project Name</label>
+            <Input id="projectName" {...form.register('projectName')} placeholder="my-saas-project" />
             {form.formState.errors.projectName && (
               <p className="text-sm text-rose-600 mt-1">{form.formState.errors.projectName.message}</p>
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Repository URL (Optional)</label>
-            <Input {...form.register('repositoryUrl')} placeholder="https://github.com/username/repo" />
+            <label htmlFor="repositoryUrl" className="block text-sm font-medium text-slate-700 mb-1">Repository URL (Optional)</label>
+            <Input id="repositoryUrl" {...form.register('repositoryUrl')} placeholder="https://github.com/username/repo" />
             {form.formState.errors.repositoryUrl && (
               <p className="text-sm text-rose-600 mt-1">{form.formState.errors.repositoryUrl.message}</p>
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Working Directory</label>
-            <Input {...form.register('workdir')} placeholder="/home/doctor/temponest" />
+            <label htmlFor="workdir" className="block text-sm font-medium text-slate-700 mb-1">Working Directory</label>
+            <Input id="workdir" {...form.register('workdir')} placeholder="/home/doctor/temponest" />
             {form.formState.errors.workdir && (
               <p className="text-sm text-rose-600 mt-1">{form.formState.errors.workdir.message}</p>
             )}
