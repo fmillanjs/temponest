@@ -17,8 +17,6 @@ from app.limiter import limiter
 from app.routers import auth, api_keys
 
 # Import shared Redis client
-import sys
-sys.path.append('/app/../..')
 from shared.redis import RedisCache
 
 # Global Redis cache instance

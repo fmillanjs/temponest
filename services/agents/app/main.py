@@ -36,8 +36,6 @@ from app.webhooks import EventDispatcher, WebhookManager, EventType
 from app.routers import webhooks as webhooks_router
 
 # Import shared Redis client
-import sys
-sys.path.append('/app/../..')
 from shared.redis import RedisCache
 
 
