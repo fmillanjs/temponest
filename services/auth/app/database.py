@@ -60,7 +60,7 @@ class Database:
 
     async def set_tenant_context(self, conn: asyncpg.Connection, tenant_id: str):
         """Set tenant context for Row-Level Security"""
-        await conn.execute(f"SET app.current_tenant = '{tenant_id}'")
+        await conn.execute("SET app.current_tenant = $1", tenant_id)
 
 
 # Global database instance

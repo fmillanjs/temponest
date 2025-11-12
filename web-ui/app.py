@@ -154,15 +154,16 @@ def api_cost_summary():
             try:
                 # Build query based on whether dates are provided
                 if start_date and end_date:
-                    query = f"""
+                    query = """
                         SELECT
                             COALESCE(SUM(total_cost_usd), 0) as total_usd,
                             COALESCE(SUM(total_tokens), 0) as total_tokens,
                             COUNT(*) as total_executions
                         FROM cost_tracking
-                        WHERE created_at::date >= '{start_date}'::date
-                        AND created_at::date <= '{end_date}'::date
+                        WHERE created_at::date >= $1::date
+                        AND created_at::date <= $2::date
                     """
+                    row = await conn.fetchrow(query, start_date, end_date)
                 else:
                     query = """
                         SELECT
@@ -171,8 +172,7 @@ def api_cost_summary():
                             COUNT(*) as total_executions
                         FROM cost_tracking
                     """
-
-                row = await conn.fetchrow(query)
+                    row = await conn.fetchrow(query)
                 result = dict(row) if row else {"total_usd": 0, "total_tokens": 0, "total_executions": 0}
                 # Convert Decimal to float for JSON serialization
                 if result.get('total_usd') is not None:
@@ -436,10 +436,10 @@ def api_get_execution_timeline():
                         AVG(latency_ms) as avg_latency,
                         COUNT(CASE WHEN status = 'failed' THEN 1 END) as failures
                     FROM cost_tracking
-                    WHERE created_at >= CURRENT_DATE - INTERVAL '%s days'
+                    WHERE created_at >= CURRENT_DATE - INTERVAL '$1 days'
                     GROUP BY DATE(created_at), agent_name
                     ORDER BY date DESC, agent_name
-                """ % days)
+                """, days)
                 return [dict(row) for row in rows]
             finally:
                 await conn.close()

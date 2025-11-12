@@ -8,3 +8,14 @@ README.md
 .gitignore
 .env
 .env*.local
+coverage/
+.vscode/
+.idea/
+tests/
+playwright-report/
+test-results/
+e2e/
+.DS_Store
+*.log
+yarn-debug.log*
+yarn-error.log*

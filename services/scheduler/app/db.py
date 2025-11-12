@@ -277,13 +277,23 @@ class DatabaseManager:
         if not updates:
             return False
 
-        # Build SET clause
+        # Whitelist of allowed columns to prevent SQL injection
+        ALLOWED_COLUMNS = {
+            'name', 'description', 'cron_expression', 'interval_seconds',
+            'scheduled_time', 'timezone', 'task_payload', 'timeout_seconds',
+            'max_retries', 'retry_delay_seconds', 'is_active', 'is_paused'
+        }
+
+        # Build SET clause with validated columns
         set_parts = []
         params = []
         param_idx = 1
 
         for key, value in updates.items():
             if value is not None:
+                # Validate column name against whitelist
+                if key not in ALLOWED_COLUMNS:
+                    raise ValueError(f"Invalid column name: {key}")
                 set_parts.append(f"{key} = ${param_idx}")
                 params.append(value)
                 param_idx += 1
