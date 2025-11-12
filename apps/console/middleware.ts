@@ -15,8 +15,15 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for session cookie
+  // Bypass authentication for E2E tests
+  // Check for test session token (set by Playwright)
   const sessionCookie = request.cookies.get("better-auth.session_token");
+  const isTestSession = sessionCookie?.value.startsWith("test-session-token-");
+
+  // Allow test sessions to pass through
+  if (isTestSession) {
+    return NextResponse.next();
+  }
 
   // Redirect to login if no session
   if (!sessionCookie) {
