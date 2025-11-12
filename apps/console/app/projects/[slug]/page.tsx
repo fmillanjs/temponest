@@ -32,19 +32,31 @@ const statusColors = {
 
 export default async function ProjectDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>
+  searchParams: Promise<{ page?: string; limit?: string }>
 }) {
   const { slug } = await params
+  const { page: pageParam, limit: limitParam } = await searchParams
+
+  // Pagination parameters
+  const page = parseInt(pageParam || '1', 10)
+  const limit = parseInt(limitParam || '20', 10)
+  const skip = (page - 1) * limit
+
+  // Fetch project metadata separately (no runs)
   const project = await prisma.project.findUnique({
     where: { slug },
-    include: {
-      runs: {
-        orderBy: { createdAt: 'desc' },
-        include: {
-          approvals: true
-        }
-      }
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      status: true,
+      type: true,
+      repoUrl: true,
+      createdAt: true,
+      updatedAt: true,
     }
   })
 
@@ -52,10 +64,51 @@ export default async function ProjectDetailPage({
     notFound()
   }
 
-  const totalRuns = project.runs.length
-  const successfulRuns = project.runs.filter(r => r.status === 'success').length
-  const failedRuns = project.runs.filter(r => r.status === 'failed').length
+  // Fetch run statistics (efficient aggregation)
+  const [totalRuns, successfulRuns, failedRuns] = await Promise.all([
+    prisma.run.count({
+      where: { projectId: project.id }
+    }),
+    prisma.run.count({
+      where: { projectId: project.id, status: 'success' }
+    }),
+    prisma.run.count({
+      where: { projectId: project.id, status: 'failed' }
+    }),
+  ])
+
   const successRate = totalRuns > 0 ? ((successfulRuns / totalRuns) * 100).toFixed(0) : '0'
+
+  // Fetch paginated runs (exclude heavy logs field initially)
+  const runs = await prisma.run.findMany({
+    where: { projectId: project.id },
+    select: {
+      id: true,
+      status: true,
+      kind: true,
+      step: true,
+      createdAt: true,
+      startedAt: true,
+      finishedAt: true,
+      logs: true, // Include logs for now - can be lazy-loaded later
+      artifacts: true,
+      approvals: {
+        select: {
+          id: true,
+          step: true,
+          status: true,
+          comment: true,
+          decidedBy: true,
+          createdAt: true,
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+    skip: skip,
+  })
+
+  const totalPages = Math.ceil(totalRuns / limit)
 
   return (
     <div className="space-y-6">
@@ -111,12 +164,14 @@ export default async function ProjectDetailPage({
           <h2 className="text-lg font-semibold text-base-900">Run History</h2>
         </div>
         <div className="divide-y divide-base-200">
-          {project.runs.length === 0 ? (
+          {runs.length === 0 ? (
             <div className="p-8 text-center text-base-600">
-              No runs yet. Start your first run to see it here.
+              {totalRuns === 0
+                ? 'No runs yet. Start your first run to see it here.'
+                : 'No runs found on this page.'}
             </div>
           ) : (
-            project.runs.map((run) => {
+            runs.map((run) => {
               const StatusIcon = statusIcons[run.status as keyof typeof statusIcons]
               const duration = run.startedAt && run.finishedAt
                 ? Math.round((run.finishedAt.getTime() - run.startedAt.getTime()) / 1000)
@@ -225,6 +280,67 @@ export default async function ProjectDetailPage({
             })
           )}
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="border-t border-base-200 p-4 flex items-center justify-between">
+            <div className="text-sm text-base-600">
+              Showing {skip + 1}-{Math.min(skip + limit, totalRuns)} of {totalRuns} runs
+            </div>
+            <div className="flex gap-2">
+              <Link
+                href={`/projects/${slug}?page=${page - 1}&limit=${limit}`}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  page <= 1
+                    ? 'bg-base-100 text-base-400 cursor-not-allowed pointer-events-none'
+                    : 'bg-white border border-base-200 text-base-900 hover:bg-base-50'
+                }`}
+              >
+                Previous
+              </Link>
+
+              <div className="flex gap-1">
+                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                  let pageNum: number
+                  if (totalPages <= 7) {
+                    pageNum = i + 1
+                  } else if (page <= 4) {
+                    pageNum = i + 1
+                  } else if (page >= totalPages - 3) {
+                    pageNum = totalPages - 6 + i
+                  } else {
+                    pageNum = page - 3 + i
+                  }
+
+                  return (
+                    <Link
+                      key={pageNum}
+                      href={`/projects/${slug}?page=${pageNum}&limit=${limit}`}
+                      className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                        page === pageNum
+                          ? 'bg-base-900 text-white'
+                          : 'bg-white border border-base-200 text-base-900 hover:bg-base-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </Link>
+                  )
+                })}
+              </div>
+
+              <Link
+                href={`/projects/${slug}?page=${page + 1}&limit=${limit}`}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  page >= totalPages
+                    ? 'bg-base-100 text-base-400 cursor-not-allowed pointer-events-none'
+                    : 'bg-white border border-base-200 text-base-900 hover:bg-base-50'
+                }`}
+              >
+                Next
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
