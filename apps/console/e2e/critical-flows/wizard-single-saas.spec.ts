@@ -20,8 +20,8 @@ test.describe('Single SaaS Wizard - Complete Workflow', () => {
     await expect(page.locator('h1')).toContainText('Single-SaaS Wizard')
 
     // Verify wizard steps are visible
-    await expect(page.locator('text=Foundation & Setup')).toBeVisible()
-    await expect(page.locator('text=Research & Validation')).toBeVisible()
+    await expect(page.locator('text=Foundation & Setup').first()).toBeVisible()
+    await expect(page.locator('text=Research & Validation').first()).toBeVisible()
   })
 
   test('displays all 8 workflow steps with correct information', async ({ page }) => {
@@ -38,7 +38,7 @@ test.describe('Single SaaS Wizard - Complete Workflow', () => {
     ]
 
     for (const step of steps) {
-      await expect(page.locator(`text=${step.title}`)).toBeVisible()
+      await expect(page.locator(`text=${step.title}`).first()).toBeVisible()
     }
   })
 
@@ -170,7 +170,7 @@ test.describe('Single SaaS Wizard - Complete Workflow', () => {
     await expect(page.locator('h1')).toContainText('Single-SaaS Wizard')
 
     // Should display all steps
-    await expect(page.locator('text=Foundation & Setup')).toBeVisible()
+    await expect(page.locator('text=Foundation & Setup').first()).toBeVisible()
   })
 
   test('displays URL validation error for invalid repository URL', async ({ page }) => {

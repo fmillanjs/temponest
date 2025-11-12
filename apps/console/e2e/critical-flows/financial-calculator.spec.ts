@@ -28,38 +28,38 @@ test.describe('Financial Calculator - Model Selection', () => {
     ]
 
     for (const model of models) {
-      await expect(page.locator(`text=${model}`)).toBeVisible()
+      await expect(page.getByRole('button', { name: model })).toBeVisible()
     }
   })
 
   test('shows descriptions for each SaaS model', async ({ page }) => {
     // Verify descriptions are present
-    await expect(page.locator('text=Form Builder SaaS')).toBeVisible()
-    await expect(page.locator('text=Web Analytics Platform')).toBeVisible()
-    await expect(page.locator('text=Simple CRM System')).toBeVisible()
-    await expect(page.locator('text=Appointment Booking')).toBeVisible()
-    await expect(page.locator('text=Email Template Builder')).toBeVisible()
+    await expect(page.locator('text=Form Builder SaaS').first()).toBeVisible()
+    await expect(page.locator('text=Web Analytics Platform').first()).toBeVisible()
+    await expect(page.locator('text=Simple CRM System').first()).toBeVisible()
+    await expect(page.locator('text=Appointment Booking').first()).toBeVisible()
+    await expect(page.locator('text=Email Template Builder').first()).toBeVisible()
   })
 
   test('can select different SaaS models', async ({ page }) => {
     // Click on FormFlow model
-    const formFlowCard = page.locator('text=FormFlow').locator('..')
+    const formFlowCard = page.getByRole('button', { name: 'FormFlow' })
     await formFlowCard.click()
     await page.waitForTimeout(300)
 
     // Click on SimpleAnalytics model
-    const analyticsCard = page.locator('text=SimpleAnalytics').locator('..')
+    const analyticsCard = page.getByRole('button', { name: 'SimpleAnalytics' })
     await analyticsCard.click()
     await page.waitForTimeout(300)
 
     // Verify we can switch between models
-    await expect(page.locator('text=SimpleAnalytics')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'SimpleAnalytics' })).toBeVisible()
   })
 
   test('has default model selected (FormFlow)', async ({ page }) => {
     // FormFlow should be the default selection
     // Look for active/selected state
-    const formFlowCard = page.locator('text=FormFlow').locator('..')
+    const formFlowCard = page.getByRole('button', { name: 'FormFlow' })
 
     // Check if it has selected state (class, aria-selected, or visual indicator)
     const classList = await formFlowCard.getAttribute('class')
@@ -73,23 +73,19 @@ test.describe('Financial Calculator - Calculation Execution', () => {
   })
 
   test('shows calculate/run button', async ({ page }) => {
-    const calculateButton = page.locator('button:has-text("Calculate")').or(
-      page.locator('button:has-text("Run")').or(
-        page.locator('button:has-text("Generate")')
-      )
-    )
+    const calculateButton = page.getByRole('button', { name: /Run Calculation|Calculate|Run|Generate/i })
 
     await expect(calculateButton.first()).toBeVisible()
   })
 
   test('displays loading state during calculation', async ({ page }) => {
     // Select a model
-    const formFlowCard = page.locator('text=FormFlow').locator('..')
+    const formFlowCard = page.getByRole('button', { name: 'FormFlow' })
     await formFlowCard.click()
 
     // Find and click calculate button
-    const calculateButton = page.locator('button:has-text("Calculate")').or(
-      page.locator('button:has-text("Run")').or(
+    const calculateButton = page.locator('button:has-text("Run Calculation")').or(
+      page.locator('button:has-text("Run Calculation")').or(
         page.locator('button:has-text("Generate")')
       )
     ).first()
@@ -111,12 +107,12 @@ test.describe('Financial Calculator - Calculation Execution', () => {
 
   test('streams calculation output in real-time', async ({ page }) => {
     // Select model
-    const formFlowCard = page.locator('text=FormFlow').locator('..')
+    const formFlowCard = page.getByRole('button', { name: 'FormFlow' })
     await formFlowCard.click()
 
     // Run calculation
-    const calculateButton = page.locator('button:has-text("Calculate")').or(
-      page.locator('button:has-text("Run")')
+    const calculateButton = page.locator('button:has-text("Run Calculation")').or(
+      page.locator('button:has-text("Run Calculation")')
     ).first()
 
     if (await calculateButton.isVisible() && !await calculateButton.isDisabled()) {
@@ -138,10 +134,10 @@ test.describe('Financial Calculator - Calculation Execution', () => {
 
   test('displays monthly breakdown table/data', async ({ page }) => {
     // Select and run calculation
-    await page.locator('text=FormFlow').click()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
 
-    const runButton = page.locator('button:has-text("Run")').or(
-      page.locator('button:has-text("Calculate")')
+    const runButton = page.locator('button:has-text("Run Calculation")').or(
+      page.locator('button:has-text("Run Calculation")')
     ).first()
 
     if (await runButton.isVisible() && !await runButton.isDisabled()) {
@@ -162,9 +158,9 @@ test.describe('Financial Calculator - Calculation Execution', () => {
   })
 
   test('shows 12-month projection summary', async ({ page }) => {
-    await page.locator('text=FormFlow').click()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
 
-    const runButton = page.locator('button:has-text("Run")').first()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
 
     if (await runButton.isVisible() && !await runButton.isDisabled()) {
       await runButton.click()
@@ -182,9 +178,9 @@ test.describe('Financial Calculator - Calculation Execution', () => {
   })
 
   test('shows 24-month projection summary', async ({ page }) => {
-    await page.locator('text=FormFlow').click()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
 
-    const runButton = page.locator('button:has-text("Run")').first()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
 
     if (await runButton.isVisible() && !await runButton.isDisabled()) {
       await runButton.click()
@@ -202,9 +198,9 @@ test.describe('Financial Calculator - Calculation Execution', () => {
   })
 
   test('displays key financial metrics (MRR, ARR, Customers, Profit)', async ({ page }) => {
-    await page.locator('text=FormFlow').click()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
 
-    const runButton = page.locator('button:has-text("Run")').first()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
 
     if (await runButton.isVisible() && !await runButton.isDisabled()) {
       await runButton.click()
@@ -234,9 +230,9 @@ test.describe('Financial Calculator - Data Visualization', () => {
   })
 
   test('displays MRR growth chart', async ({ page }) => {
-    await page.locator('text=FormFlow').click()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
 
-    const runButton = page.locator('button:has-text("Run")').first()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
 
     if (await runButton.isVisible() && !await runButton.isDisabled()) {
       await runButton.click()
@@ -256,9 +252,9 @@ test.describe('Financial Calculator - Data Visualization', () => {
   })
 
   test('displays customer growth chart', async ({ page }) => {
-    await page.locator('text=FormFlow').click()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
 
-    const runButton = page.locator('button:has-text("Run")').first()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
 
     if (await runButton.isVisible() && !await runButton.isDisabled()) {
       await runButton.click()
@@ -274,9 +270,9 @@ test.describe('Financial Calculator - Data Visualization', () => {
   })
 
   test('displays cumulative profit chart', async ({ page }) => {
-    await page.locator('text=FormFlow').click()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
 
-    const runButton = page.locator('button:has-text("Run")').first()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
 
     if (await runButton.isVisible() && !await runButton.isDisabled()) {
       await runButton.click()
@@ -292,9 +288,9 @@ test.describe('Financial Calculator - Data Visualization', () => {
   })
 
   test('charts are responsive and properly sized', async ({ page }) => {
-    await page.locator('text=FormFlow').click()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
 
-    const runButton = page.locator('button:has-text("Run")').first()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
 
     if (await runButton.isVisible() && !await runButton.isDisabled()) {
       await runButton.click()
@@ -317,9 +313,9 @@ test.describe('Financial Calculator - Export Functionality', () => {
     await page.goto('/financials')
 
     // Run calculation first to have data to export
-    await page.locator('text=FormFlow').click()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
 
-    const runButton = page.locator('button:has-text("Run")').first()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
     if (await runButton.isVisible() && !await runButton.isDisabled()) {
       await runButton.click()
       await page.waitForTimeout(5000)
@@ -393,9 +389,9 @@ test.describe('Financial Calculator - Save to Database', () => {
     await page.goto('/financials')
 
     // Run calculation first
-    await page.locator('text=FormFlow').click()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
 
-    const runButton = page.locator('button:has-text("Run")').first()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
     if (await runButton.isVisible() && !await runButton.isDisabled()) {
       await runButton.click()
       await page.waitForTimeout(5000)
@@ -454,9 +450,9 @@ test.describe('Financial Calculator - Different Models', () => {
   test('calculates projections for SimpleAnalytics model', async ({ page }) => {
     await page.goto('/financials')
 
-    await page.locator('text=SimpleAnalytics').click()
+    await page.getByRole('button', { name: 'SimpleAnalytics' }).click()
 
-    const runButton = page.locator('button:has-text("Run")').first()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
     if (await runButton.isVisible()) {
       await runButton.click()
       await page.waitForTimeout(5000)
@@ -470,9 +466,9 @@ test.describe('Financial Calculator - Different Models', () => {
   test('calculates projections for MicroCRM model', async ({ page }) => {
     await page.goto('/financials')
 
-    await page.locator('text=MicroCRM').click()
+    await page.getByRole('button', { name: 'MicroCRM' }).click()
 
-    const runButton = page.locator('button:has-text("Run")').first()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
     if (await runButton.isVisible()) {
       await runButton.click()
       await page.waitForTimeout(5000)
@@ -487,8 +483,8 @@ test.describe('Financial Calculator - Different Models', () => {
     await page.goto('/financials')
 
     // Run first calculation with FormFlow
-    await page.locator('text=FormFlow').click()
-    let runButton = page.locator('button:has-text("Run")').first()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
+    let runButton = page.locator('button:has-text("Run Calculation")').first()
 
     if (await runButton.isVisible()) {
       await runButton.click()
@@ -496,8 +492,8 @@ test.describe('Financial Calculator - Different Models', () => {
     }
 
     // Switch to QuickSchedule and recalculate
-    await page.locator('text=QuickSchedule').click()
-    runButton = page.locator('button:has-text("Run")').first()
+    await page.getByRole('button', { name: 'QuickSchedule' }).click()
+    runButton = page.locator('button:has-text("Run Calculation")').first()
 
     if (await runButton.isVisible()) {
       await runButton.click()
@@ -519,7 +515,7 @@ test.describe('Financial Calculator - Responsive Design', () => {
     await expect(page.locator('h1')).toContainText('Financial Calculator')
 
     // Model cards should still be accessible
-    await expect(page.locator('text=FormFlow')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'FormFlow' })).toBeVisible()
   })
 
   test('works on tablet viewport', async ({ page }) => {
@@ -527,16 +523,16 @@ test.describe('Financial Calculator - Responsive Design', () => {
     await page.goto('/financials')
 
     // Verify all elements are accessible
-    await expect(page.locator('text=FormFlow')).toBeVisible()
-    await expect(page.locator('text=SimpleAnalytics')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'FormFlow' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'SimpleAnalytics' })).toBeVisible()
   })
 
   test('charts resize properly on different viewports', async ({ page }) => {
     await page.goto('/financials')
 
     // Run calculation
-    await page.locator('text=FormFlow').click()
-    const runButton = page.locator('button:has-text("Run")').first()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
 
     if (await runButton.isVisible()) {
       await runButton.click()
@@ -567,8 +563,8 @@ test.describe('Financial Calculator - Error Handling', () => {
       route.abort('failed')
     })
 
-    await page.locator('text=FormFlow').click()
-    const runButton = page.locator('button:has-text("Run")').first()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
 
     if (await runButton.isVisible()) {
       await runButton.click()
@@ -588,8 +584,8 @@ test.describe('Financial Calculator - Error Handling', () => {
   test('disables buttons during calculation', async ({ page }) => {
     await page.goto('/financials')
 
-    await page.locator('text=FormFlow').click()
-    const runButton = page.locator('button:has-text("Run")').first()
+    await page.getByRole('button', { name: 'FormFlow' }).click()
+    const runButton = page.locator('button:has-text("Run Calculation")').first()
 
     if (await runButton.isVisible()) {
       await runButton.click()
