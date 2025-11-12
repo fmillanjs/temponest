@@ -16,19 +16,39 @@ from app.database import db
 from app.limiter import limiter
 from app.routers import auth, api_keys
 
+# Import shared Redis client
+import sys
+sys.path.append('/app/../..')
+from shared.redis import RedisCache
+
+# Global Redis cache instance
+cache: RedisCache = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic"""
+    global cache
     print("🔐 Starting Auth Service...")
 
     # Connect to database
     await db.connect()
 
+    # Connect to Redis
+    cache = RedisCache(url=settings.REDIS_URL)
+    try:
+        await cache.connect()
+        print(f"✅ Connected to Redis at {settings.REDIS_URL}")
+    except Exception as e:
+        print(f"⚠️  Failed to connect to Redis: {e}. Caching will be disabled.")
+        cache = None
+
     yield
 
     # Cleanup
     await db.disconnect()
+    if cache:
+        await cache.close()
 
 # Create FastAPI app
 app = FastAPI(

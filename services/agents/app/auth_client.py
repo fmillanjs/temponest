@@ -4,6 +4,7 @@ Validates JWT tokens and API keys by calling the auth service.
 """
 
 import httpx
+import hashlib
 from typing import Optional, List
 from pydantic import BaseModel
 
@@ -21,16 +22,35 @@ class AuthContext(BaseModel):
 class AuthClient:
     """Client to validate authentication with the auth service"""
 
-    def __init__(self, auth_service_url: str = "http://auth:9002", jwt_secret: str = ""):
+    def __init__(self, auth_service_url: str = "http://auth:9002", jwt_secret: str = "", cache=None):
         self.auth_service_url = auth_service_url
         self.jwt_secret = jwt_secret
         self.client = httpx.AsyncClient(timeout=5.0)
+        self.cache = cache
 
     async def verify_token(self, token: str) -> Optional[AuthContext]:
         """
-        Verify a JWT token or API key with the auth service.
+        Verify a JWT token or API key with Redis caching.
         Returns AuthContext if valid, None if invalid.
+
+        Cache Key: jwt:{sha256(token)}
+        TTL: 30 seconds
         """
+        # Generate cache key
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        cache_key = f"jwt:{token_hash}"
+
+        # Try to get from cache
+        if self.cache:
+            try:
+                cached_data = await self.cache.get(cache_key)
+                if cached_data:
+                    # Convert dict to AuthContext
+                    return AuthContext(**cached_data)
+            except Exception as e:
+                print(f"Cache read error: {e}")
+
+        # Cache miss - verify token
         try:
             # Try to decode JWT with signature verification
             import jwt
@@ -45,7 +65,7 @@ class AuthClient:
             )
 
             # Build auth context from JWT payload
-            return AuthContext(
+            auth_context = AuthContext(
                 user_id=payload.get("sub", "unknown"),
                 tenant_id=payload.get("tenant_id", "unknown"),
                 email=payload.get("email", "unknown"),
@@ -53,6 +73,15 @@ class AuthClient:
                 permissions=payload.get("permissions", []),
                 is_superuser=payload.get("is_superuser", False)
             )
+
+            # Cache the result for 30 seconds
+            if self.cache:
+                try:
+                    await self.cache.set(cache_key, auth_context.dict(), ttl=30)
+                except Exception as e:
+                    print(f"Cache write error: {e}")
+
+            return auth_context
 
         except jwt.ExpiredSignatureError:
             print("Token has expired")

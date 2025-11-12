@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql://postgres:postgres@postgres:5432/agentic"
 
+    # Redis (for caching)
+    REDIS_URL: str = "redis://agentic-redis:6379/0"
+
     # Langfuse
     LANGFUSE_PUBLIC_KEY: Optional[str] = None
     LANGFUSE_SECRET_KEY: Optional[str] = None

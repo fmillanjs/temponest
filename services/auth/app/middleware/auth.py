@@ -10,6 +10,12 @@ from app.models import AuthContext
 from app.handlers import JWTHandler, APIKeyHandler
 from app.database import db
 
+# Import cache from main (will be set at runtime)
+def get_cache():
+    """Get global cache instance from main"""
+    import app.main as main_module
+    return getattr(main_module, 'cache', None)
+
 
 security = HTTPBearer(auto_error=False)
 
@@ -29,10 +35,11 @@ async def get_current_user(
         )
 
     token = credentials.credentials
+    cache = get_cache()
 
     # Try JWT first
     if not token.startswith("sk_"):
-        payload = JWTHandler.verify_token(token, expected_type="access")
+        payload = await JWTHandler.verify_token(token, expected_type="access", cache=cache)
         if payload:
             return AuthContext(
                 user_id=payload["sub"],
@@ -134,7 +141,25 @@ async def require_role(role: str):
 
 
 async def get_user_permissions(user_id: str) -> list[str]:
-    """Get all permissions for a user"""
+    """
+    Get all permissions for a user with Redis caching.
+
+    Cache Key: user_perms:{user_id}
+    TTL: 5 minutes (300 seconds)
+    """
+    cache = get_cache()
+    cache_key = f"user_perms:{user_id}"
+
+    # Try to get from cache
+    if cache:
+        try:
+            cached_permissions = await cache.get(cache_key)
+            if cached_permissions is not None:
+                return cached_permissions
+        except Exception as e:
+            print(f"Cache read error for permissions: {e}")
+
+    # Cache miss - fetch from database
     rows = await db.fetch(
         """
         SELECT DISTINCT p.name
@@ -145,7 +170,16 @@ async def get_user_permissions(user_id: str) -> list[str]:
         """,
         user_id
     )
-    return [row["name"] for row in rows]
+    permissions = [row["name"] for row in rows]
+
+    # Cache the result for 5 minutes
+    if cache:
+        try:
+            await cache.set(cache_key, permissions, ttl=300)
+        except Exception as e:
+            print(f"Cache write error for permissions: {e}")
+
+    return permissions
 
 
 async def get_user_roles(user_id: str) -> list[str]:
@@ -177,13 +211,14 @@ class AuthMiddleware:
         # Extract auth header
         headers = dict(scope.get("headers", []))
         auth_header = headers.get(b"authorization", b"").decode()
+        cache = get_cache()
 
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
 
             # Try to extract tenant_id
             if not token.startswith("sk_"):
-                payload = JWTHandler.verify_token(token)
+                payload = await JWTHandler.verify_token(token, cache=cache)
                 if payload:
                     scope["state"]["tenant_id"] = payload.get("tenant_id")
                     scope["state"]["user_id"] = payload.get("sub")

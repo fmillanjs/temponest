@@ -35,6 +35,11 @@ from app.cost.tracker import CostTracker
 from app.webhooks import EventDispatcher, WebhookManager, EventType
 from app.routers import webhooks as webhooks_router
 
+# Import shared Redis client
+import sys
+sys.path.append('/app/../..')
+from shared.redis import RedisCache
+
 
 # Request/Response Models
 class AgentRequest(BaseModel):
@@ -92,6 +97,9 @@ event_dispatcher: Optional[EventDispatcher] = None
 # Collaboration system
 collaboration_manager: Optional[Any] = None
 
+# Redis cache
+cache: Optional[RedisCache] = None
+
 # Background task flag
 _metrics_task: Optional[asyncio.Task] = None
 
@@ -138,10 +146,20 @@ async def lifespan(app: FastAPI):
     global rag_memory, langfuse_tracer, overseer_agent, developer_agent, qa_tester_agent, devops_agent, designer_agent, security_auditor_agent, ux_researcher_agent, department_manager
     global db_pool, cost_calculator, cost_tracker
     global webhook_manager, event_dispatcher
-    global collaboration_manager
+    global collaboration_manager, cache
 
     # Startup
     print("🚀 Starting Agent Service...")
+
+    # Initialize Redis cache
+    print("🔴 Initializing Redis cache...")
+    cache = RedisCache(url=settings.REDIS_URL)
+    try:
+        await cache.connect()
+        print(f"   ✅ Connected to Redis at {settings.REDIS_URL}")
+    except Exception as e:
+        print(f"   ⚠️  Failed to connect to Redis: {e}. Caching will be disabled.")
+        cache = None
 
     # Initialize database pool for cost tracking
     print("💾 Initializing cost tracking...")
@@ -200,7 +218,8 @@ async def lifespan(app: FastAPI):
     # Initialize auth client
     auth_client = AuthClient(
         auth_service_url=settings.AUTH_SERVICE_URL,
-        jwt_secret=settings.JWT_SECRET_KEY
+        jwt_secret=settings.JWT_SECRET_KEY,
+        cache=cache
     )
     set_auth_client(auth_client)
     print(f"   Auth client configured: {settings.AUTH_SERVICE_URL}")

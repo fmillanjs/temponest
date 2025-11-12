@@ -7,6 +7,7 @@ from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from uuid import UUID, uuid4
 from app.settings import settings
+import hashlib
 
 
 class JWTHandler:
@@ -68,11 +69,28 @@ class JWTHandler:
         )
 
     @staticmethod
-    def verify_token(token: str, expected_type: str = "access") -> Optional[Dict[str, Any]]:
+    async def verify_token(token: str, expected_type: str = "access", cache=None) -> Optional[Dict[str, Any]]:
         """
-        Verify and decode JWT token.
+        Verify and decode JWT token with Redis caching.
         Returns payload if valid, None if invalid.
+
+        Cache Key: jwt:{sha256(token)}
+        TTL: 30 seconds
         """
+        # Generate cache key
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        cache_key = f"jwt:{token_hash}"
+
+        # Try to get from cache
+        if cache:
+            try:
+                cached_payload = await cache.get(cache_key)
+                if cached_payload:
+                    return cached_payload
+            except Exception as e:
+                print(f"Cache read error: {e}")
+
+        # Cache miss - verify token
         try:
             payload = jwt.decode(
                 token,
@@ -83,6 +101,13 @@ class JWTHandler:
             # Check token type
             if payload.get("type") != expected_type:
                 return None
+
+            # Cache the result for 30 seconds
+            if cache:
+                try:
+                    await cache.set(cache_key, payload, ttl=30)
+                except Exception as e:
+                    print(f"Cache write error: {e}")
 
             # Check expiration (jose library does this automatically)
             return payload
