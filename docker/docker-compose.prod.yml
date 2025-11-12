@@ -1,0 +1,573 @@
+version: '3.8'
+
+networks:
+  agentic-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  qdrant-data:
+  ollama-data:
+  n8n-data:
+  temporal-data:
+  redis-data:
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:
+
+services:
+  # PostgreSQL - shared by Temporal and Langfuse
+  postgres:
+    image: postgres:16-alpine
+    container_name: agentic-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-agentic}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./migrations:/docker-entrypoint-initdb.d/migrations
+    ports:
+      - "5434:5432"
+    networks:
+      - agentic-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis - Caching and Rate Limiting
+  redis:
+    image: redis:7-alpine
+    container_name: agentic-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - agentic-network
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Auth Service - Production mode
+  auth:
+    build:
+      context: ../services/auth
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: agentic-auth
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "9002:9002"
+    environment:
+      - PYTHONPATH=/app
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/agentic
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      - JWT_REFRESH_TOKEN_EXPIRE_DAYS=${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-30}
+    networks:
+      - agentic-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:9002/health').read()\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Temporal Server
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    container_name: agentic-temporal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_SEEDS=postgres
+    ports:
+      - "7233:7233"
+      - "8080:8080"
+    networks:
+      - agentic-network
+    restart: always
+    volumes:
+      - temporal-data:/etc/temporal
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "workflow", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: agentic-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - agentic-network
+    restart: always
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Langfuse - LLM Observability
+  langfuse:
+    image: langfuse/langfuse:2
+    container_name: agentic-langfuse
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3001:3000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/langfuse
+      - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=${LANGFUSE_NEXTAUTH_URL}
+      - SALT=${LANGFUSE_SALT}
+      - TELEMETRY_ENABLED=${LANGFUSE_TELEMETRY_ENABLED:-false}
+      - NODE_ENV=production
+    networks:
+      - agentic-network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://$(hostname -i):3000/api/public/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Ollama - Local LLM Runtime
+  ollama:
+    image: ollama/ollama:latest
+    container_name: agentic-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - agentic-network
+    restart: always
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+        reservations:
+          cpus: '2.0'
+          memory: 4G
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Open WebUI - Chat Interface
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: agentic-open-webui
+    depends_on:
+      - ollama
+    ports:
+      - "8081:8080"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+    volumes:
+      - ./open-webui-data:/app/backend/data
+    networks:
+      - agentic-network
+    restart: always
+
+  # n8n - Workflow Automation
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: agentic-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD}
+      - N8N_HOST=${N8N_HOST}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL}
+      - GENERIC_TIMEZONE=${TZ:-UTC}
+    volumes:
+      - n8n-data:/home/node/.n8n
+    networks:
+      - agentic-network
+    restart: always
+
+  # Agent Service - Production mode
+  agents:
+    build:
+      context: ../services/agents
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: agentic-agents
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      langfuse:
+        condition: service_healthy
+    ports:
+      - "9000:9000"
+    environment:
+      - PYTHONPATH=/app
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_API_BASE=http://ollama:11434
+      - QDRANT_URL=http://qdrant:6333
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/agentic
+      - REDIS_URL=redis://redis:6379/0
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=http://langfuse:3000
+      - AUTH_SERVICE_URL=http://auth:9002
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - OVERSEER_PROVIDER=${OVERSEER_PROVIDER:-ollama}
+      - DEVELOPER_PROVIDER=${DEVELOPER_PROVIDER:-ollama}
+      - BUDGET_TOKENS_PER_TASK=${BUDGET_TOKENS_PER_TASK:-8000}
+      - LATENCY_SLO_MS=${LATENCY_SLO_MS:-5000}
+      - RAG_TOP_K=${RAG_TOP_K:-5}
+      - RAG_MIN_SCORE=${RAG_MIN_SCORE:-0.7}
+      - OLLAMA_CHAT_MODEL=${OLLAMA_CHAT_MODEL:-mistral:7b-instruct}
+      - OLLAMA_CODE_MODEL=${OLLAMA_CODE_MODEL:-qwen2.5-coder:7b}
+      - MODEL_TEMPERATURE=${MODEL_TEMPERATURE:-0.2}
+      - MODEL_TOP_P=${MODEL_TOP_P:-0.9}
+      - MODEL_MAX_TOKENS=${MODEL_MAX_TOKENS:-2048}
+      - MODEL_SEED=${MODEL_SEED:-42}
+    networks:
+      - agentic-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '2.0'
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Temporal Workers - Production mode
+  temporal-workers:
+    build:
+      context: ../services/temporal_workers
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: agentic-temporal-workers
+    depends_on:
+      temporal:
+        condition: service_healthy
+      agents:
+        condition: service_healthy
+    environment:
+      - TEMPORAL_HOST=temporal:7233
+      - TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE:-default}
+      - AGENTS_URL=http://agents:9000
+      - APPROVAL_UI_URL=http://approval-ui:9001
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
+    networks:
+      - agentic-network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import sys; sys.exit(0)' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Approval UI - Production mode
+  approval-ui:
+    build:
+      context: ../services/approval_ui
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: agentic-approval-ui
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "9001:9001"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/approvals
+      - TEMPORAL_HOST=temporal:7233
+      - SECRET_KEY=${APPROVAL_UI_SECRET_KEY}
+      - AUTH_SERVICE_URL=http://auth:9002
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    networks:
+      - agentic-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Scheduler Service - Production mode
+  scheduler:
+    build:
+      context: ../services/scheduler
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: agentic-scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      agents:
+        condition: service_healthy
+    ports:
+      - "9003:9003"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/agentic
+      - AGENT_SERVICE_URL=http://agents:9000
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SCHEDULER_POLL_INTERVAL_SECONDS=${SCHEDULER_POLL_INTERVAL_SECONDS:-30}
+      - SCHEDULER_MAX_INSTANCES=${SCHEDULER_MAX_INSTANCES:-10}
+      - SCHEDULER_TIMEZONE=${SCHEDULER_TIMEZONE:-UTC}
+    networks:
+      - agentic-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9003/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Ingestion Service - Production mode
+  ingestion:
+    build:
+      context: ../services/ingestion
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: agentic-ingestion
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-nomic-embed-text}
+      - WATCH_DIR=/data/documents
+    volumes:
+      # Only mount data directory, not source code
+      - ./documents:/data/documents
+    networks:
+      - agentic-network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import sys; sys.exit(0)' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Prometheus - Metrics Collection
+  agentic-prometheus:
+    image: prom/prometheus:latest
+    container_name: agentic-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=90d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9091:9090"
+    volumes:
+      - ../infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../infra/prometheus/alerts:/etc/prometheus/alerts
+      - prometheus-data:/prometheus
+    networks:
+      - agentic-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # AlertManager - Alert Routing and Notification
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: agentic-alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=${ALERTMANAGER_URL}'
+    ports:
+      - "9093:9093"
+    volumes:
+      - ../infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager-data:/alertmanager
+    networks:
+      - agentic-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana - Metrics Visualization and Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: agentic-grafana
+    depends_on:
+      - agentic-prometheus
+    ports:
+      - "3003:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL}
+      - GF_INSTALL_PLUGINS=
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/system-health.json
+    volumes:
+      - ../infra/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ../infra/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ../infra/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana-data:/var/lib/grafana
+    networks:
+      - agentic-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Web UI - Production mode
+  web-ui:
+    build:
+      context: ..
+      dockerfile: web-ui/Dockerfile
+      target: runtime
+    container_name: agentic-web-ui
+    depends_on:
+      - agents
+      - scheduler
+    ports:
+      - "8082:8080"
+    environment:
+      - TEMPONEST_BASE_URL=http://agents:9000
+      - TEMPONEST_AUTH_TOKEN=${AUTH_TOKEN}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=agentic
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PROMETHEUS_URL=http://agentic-prometheus:9090
+      - FLASK_ENV=production
+    volumes:
+      # Only mount config directory, not source code
+      - ../config:/config
+    networks:
+      - agentic-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
