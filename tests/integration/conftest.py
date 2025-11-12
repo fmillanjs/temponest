@@ -20,14 +20,22 @@ APPROVAL_UI_URL = os.getenv("APPROVAL_UI_URL", "http://localhost:9001")
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create an event loop for the entire test session"""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest_asyncio.fixture(scope="session")
 async def http_client():
-    """Create HTTP client for API calls"""
+    """Create HTTP client for API calls (session-scoped to reduce overhead)"""
     async with httpx.AsyncClient(timeout=30.0) as client:
         yield client
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def auth_client(http_client):
     """Client for Auth service"""
     return {
@@ -36,7 +44,7 @@ async def auth_client(http_client):
     }
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def agents_client(http_client):
     """Client for Agents service"""
     return {
@@ -45,7 +53,7 @@ async def agents_client(http_client):
     }
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def scheduler_client(http_client):
     """Client for Scheduler service"""
     return {
@@ -54,7 +62,7 @@ async def scheduler_client(http_client):
     }
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def approval_ui_client(http_client):
     """Client for Approval UI service"""
     return {
@@ -63,7 +71,7 @@ async def approval_ui_client(http_client):
     }
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def qdrant_client(http_client):
     """Client for Qdrant service"""
     return {
@@ -72,7 +80,7 @@ async def qdrant_client(http_client):
     }
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def test_user_credentials():
     """Test user credentials for authentication"""
     return {
@@ -83,7 +91,7 @@ async def test_user_credentials():
     }
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def authenticated_session(http_client, auth_client, test_user_credentials):
     """
     Create authenticated session with access token.
@@ -111,34 +119,51 @@ async def authenticated_session(http_client, auth_client, test_user_credentials)
         # User may already exist or network error, continue to login
         pass
 
-    # Login to get access token
-    try:
-        login_response = await http_client.post(
-            f"{auth_client['base_url']}/auth/login",
-            json={
-                "email": test_user_credentials["email"],
-                "password": test_user_credentials["password"]
+    # Login to get access token with retry logic for rate limiting
+    max_retries = 3
+    retry_delay = 2.0
+
+    for attempt in range(max_retries):
+        try:
+            login_response = await http_client.post(
+                f"{auth_client['base_url']}/auth/login",
+                json={
+                    "email": test_user_credentials["email"],
+                    "password": test_user_credentials["password"]
+                }
+            )
+
+            # Handle rate limiting with exponential backoff
+            if login_response.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = retry_delay * (2 ** attempt)
+                    print(f"\nRate limited, waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                    await asyncio.sleep(wait_time)
+                    continue
+                else:
+                    pytest.skip(f"Rate limit exceeded after {max_retries} retries")
+
+            if login_response.status_code != 200:
+                pytest.skip(f"Failed to login test user: {login_response.text}")
+
+            auth_data = login_response.json()
+            access_token = auth_data.get("access_token")
+
+            if not access_token:
+                pytest.skip("No access token in login response")
+
+            return {
+                "client": http_client,
+                "access_token": access_token,
+                "user_id": auth_data.get("user_id"),
+                "tenant_id": auth_data.get("user", {}).get("tenant_id") or auth_data.get("tenant_id"),
+                "headers": {"Authorization": f"Bearer {access_token}"}
             }
-        )
-
-        if login_response.status_code != 200:
-            pytest.skip(f"Failed to login test user: {login_response.text}")
-
-        auth_data = login_response.json()
-        access_token = auth_data.get("access_token")
-
-        if not access_token:
-            pytest.skip("No access token in login response")
-
-        return {
-            "client": http_client,
-            "access_token": access_token,
-            "user_id": auth_data.get("user_id"),
-            "tenant_id": auth_data.get("user", {}).get("tenant_id") or auth_data.get("tenant_id"),
-            "headers": {"Authorization": f"Bearer {access_token}"}
-        }
-    except Exception as e:
-        pytest.skip(f"Failed to authenticate: {str(e)}")
+        except Exception as e:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
+                continue
+            pytest.skip(f"Failed to authenticate: {str(e)}")
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -260,7 +285,7 @@ async def service_health_check(http_client):
     return services_status
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def second_test_user():
     """
     Second test user for multi-tenant testing.
@@ -275,7 +300,7 @@ async def second_test_user():
     }
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def second_authenticated_session(http_client, auth_client, second_test_user):
     """
     Second authenticated session for multi-tenant testing.
@@ -300,31 +325,48 @@ async def second_authenticated_session(http_client, auth_client, second_test_use
         # User may already exist or network error, continue to login
         pass
 
-    # Login to get access token
-    try:
-        login_response = await http_client.post(
-            f"{auth_client['base_url']}/auth/login",
-            json={
-                "email": second_test_user["email"],
-                "password": second_test_user["password"]
+    # Login to get access token with retry logic for rate limiting
+    max_retries = 3
+    retry_delay = 2.0
+
+    for attempt in range(max_retries):
+        try:
+            login_response = await http_client.post(
+                f"{auth_client['base_url']}/auth/login",
+                json={
+                    "email": second_test_user["email"],
+                    "password": second_test_user["password"]
+                }
+            )
+
+            # Handle rate limiting with exponential backoff
+            if login_response.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = retry_delay * (2 ** attempt)
+                    print(f"\nRate limited (second user), waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                    await asyncio.sleep(wait_time)
+                    continue
+                else:
+                    pytest.skip(f"Rate limit exceeded after {max_retries} retries")
+
+            if login_response.status_code != 200:
+                pytest.skip(f"Failed to login second test user: {login_response.text}")
+
+            auth_data = login_response.json()
+            access_token = auth_data.get("access_token")
+
+            if not access_token:
+                pytest.skip("No access token in login response")
+
+            return {
+                "client": http_client,
+                "access_token": access_token,
+                "user_id": auth_data.get("user_id"),
+                "tenant_id": auth_data.get("user", {}).get("tenant_id") or auth_data.get("tenant_id"),
+                "headers": {"Authorization": f"Bearer {access_token}"}
             }
-        )
-
-        if login_response.status_code != 200:
-            pytest.skip(f"Failed to login second test user: {login_response.text}")
-
-        auth_data = login_response.json()
-        access_token = auth_data.get("access_token")
-
-        if not access_token:
-            pytest.skip("No access token in login response")
-
-        return {
-            "client": http_client,
-            "access_token": access_token,
-            "user_id": auth_data.get("user_id"),
-            "tenant_id": auth_data.get("user", {}).get("tenant_id") or auth_data.get("tenant_id"),
-            "headers": {"Authorization": f"Bearer {access_token}"}
-        }
-    except Exception as e:
-        pytest.skip(f"Failed to authenticate second user: {str(e)}")
+        except Exception as e:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
+                continue
+            pytest.skip(f"Failed to authenticate second user: {str(e)}")

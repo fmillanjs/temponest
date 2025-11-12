@@ -76,8 +76,9 @@ async def test_schedule_validation_nonexistent_agent(
     """
     fake_agent_id = "00000000-0000-0000-0000-000000000000"
 
+    # Remove trailing slash to avoid 307 redirect
     response = await authenticated_session["client"].post(
-        f"{scheduler_client['base_url']}/schedules/",
+        f"{scheduler_client['base_url']}/schedules",
         headers=authenticated_session["headers"],
         json={
             "name": "Invalid Agent Schedule",
@@ -85,7 +86,8 @@ async def test_schedule_validation_nonexistent_agent(
             "cron_expression": "0 0 * * *",
             "task_payload": {},
             "tenant_id": authenticated_session["tenant_id"]
-        }
+        },
+        follow_redirects=True  # Follow 307 redirects
     )
 
     # Should fail validation (400, 404, or 422)
