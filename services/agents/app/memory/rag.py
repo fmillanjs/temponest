@@ -8,6 +8,8 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 from qdrant_client.http.exceptions import UnexpectedResponse
 import httpx
+import hashlib
+import json
 
 
 class RAGMemory:
@@ -18,7 +20,8 @@ class RAGMemory:
         qdrant_url: str,
         collection_name: str = "agentic_knowledge",
         embedding_model: str = "nomic-embed-text",
-        embedding_dim: int = 768
+        embedding_dim: int = 768,
+        cache=None
     ):
         self.qdrant_url = qdrant_url
         self.collection_name = collection_name
@@ -26,6 +29,7 @@ class RAGMemory:
         self.embedding_dim = embedding_dim
         self.client: Optional[QdrantClient] = None
         self._ollama_url = qdrant_url.replace(":6333", ":11434").replace("qdrant", "ollama")
+        self.cache = cache
 
     async def initialize(self):
         """Initialize Qdrant client and create collection if needed"""
@@ -88,7 +92,10 @@ class RAGMemory:
         filters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Retrieve relevant documents with citations.
+        Retrieve relevant documents with citations and Redis caching.
+
+        Cache Key: rag:{sha256(query + filters + top_k + min_score)}
+        TTL: 15 minutes (900 seconds)
 
         Returns list of dicts with:
         - content: document text
@@ -101,6 +108,21 @@ class RAGMemory:
         if not self.client:
             raise RuntimeError("RAGMemory not initialized")
 
+        # Generate cache key
+        cache_data = f"{query}|{json.dumps(filters, sort_keys=True) if filters else ''}|{top_k}|{min_score}"
+        cache_hash = hashlib.sha256(cache_data.encode()).hexdigest()
+        cache_key = f"rag:{cache_hash}"
+
+        # Try to get from cache
+        if self.cache:
+            try:
+                cached_results = await self.cache.get(cache_key)
+                if cached_results is not None:
+                    return cached_results
+            except Exception as e:
+                print(f"RAG cache read error: {e}")
+
+        # Cache miss - perform RAG query
         # Generate query embedding
         query_vector = await self.embed_text(query)
 
@@ -135,6 +157,13 @@ class RAGMemory:
                 "score": result.score,
                 "metadata": payload.get("metadata", {})
             })
+
+        # Cache the results for 15 minutes
+        if self.cache:
+            try:
+                await self.cache.set(cache_key, documents, ttl=900)
+            except Exception as e:
+                print(f"RAG cache write error: {e}")
 
         return documents
 

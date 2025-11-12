@@ -228,7 +228,8 @@ async def lifespan(app: FastAPI):
     rag_memory = RAGMemory(
         qdrant_url=settings.QDRANT_URL,
         collection_name="agentic_knowledge",
-        embedding_model=settings.EMBEDDING_MODEL
+        embedding_model=settings.EMBEDDING_MODEL,
+        cache=cache
     )
     await rag_memory.initialize()
 
@@ -469,8 +470,25 @@ async def record_execution_cost(
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint"""
-    # Check service health
+    """
+    Health check endpoint with Redis caching.
+
+    Cache Key: health:agents
+    TTL: 10 seconds
+    """
+    cache_key = "health:agents"
+
+    # Try to get from cache
+    if cache:
+        try:
+            cached_health = await cache.get(cache_key)
+            if cached_health:
+                # Return cached response but still update metrics
+                return HealthResponse(**cached_health)
+        except Exception as e:
+            print(f"Health check cache read error: {e}")
+
+    # Cache miss - check health
     qdrant_healthy = rag_memory and rag_memory.is_healthy()
     langfuse_healthy = langfuse_tracer and langfuse_tracer.is_healthy()
     database_healthy = db_pool is not None
@@ -479,6 +497,7 @@ async def health_check():
         "qdrant": "healthy" if qdrant_healthy else "unhealthy",
         "langfuse": "healthy" if langfuse_healthy else "unhealthy",
         "database": "healthy" if database_healthy else "unhealthy",
+        "cache": "healthy" if cache else "unhealthy",
         "overseer": "ready" if overseer_agent else "not_initialized",
         "developer": "ready" if developer_agent else "not_initialized",
         "qa_tester": "ready" if qa_tester_agent else "not_initialized",
@@ -507,7 +526,7 @@ async def health_check():
         db_pool_size.labels(pool_type="available").set(pool_free)
         db_pool_size.labels(pool_type="in_use").set(pool_in_use)
 
-    return HealthResponse(
+    health_response = HealthResponse(
         status="healthy" if all(v in ["healthy", "ready"] for v in services.values()) else "degraded",
         services=services,
         models={
@@ -518,6 +537,15 @@ async def health_check():
             "embedding": settings.EMBEDDING_MODEL
         }
     )
+
+    # Cache for 10 seconds
+    if cache:
+        try:
+            await cache.set(cache_key, health_response.dict(), ttl=10)
+        except Exception as e:
+            print(f"Health check cache write error: {e}")
+
+    return health_response
 
 
 @app.post("/overseer/run", response_model=AgentResponse)

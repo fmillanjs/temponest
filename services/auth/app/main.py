@@ -113,12 +113,39 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.get("/health")
 @limiter.exempt
 async def health_check():
-    """Health check endpoint"""
-    return {
+    """
+    Health check endpoint with Redis caching.
+
+    Cache Key: health:auth
+    TTL: 10 seconds
+    """
+    cache_key = "health:auth"
+
+    # Try to get from cache
+    if cache:
+        try:
+            cached_health = await cache.get(cache_key)
+            if cached_health:
+                return cached_health
+        except Exception as e:
+            print(f"Health check cache read error: {e}")
+
+    # Cache miss - check health
+    health_status = {
         "status": "healthy",
         "service": "auth",
-        "database": "connected" if db.pool else "disconnected"
+        "database": "connected" if db.pool else "disconnected",
+        "cache": "connected" if cache else "disconnected"
     }
+
+    # Cache for 10 seconds
+    if cache:
+        try:
+            await cache.set(cache_key, health_status, ttl=10)
+        except Exception as e:
+            print(f"Health check cache write error: {e}")
+
+    return health_status
 
 
 # Include routers
