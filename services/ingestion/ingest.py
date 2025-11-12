@@ -53,10 +53,30 @@ class DocumentProcessor:
     """Process documents and ingest into Qdrant"""
 
     def __init__(self):
-        self.qdrant = QdrantClient(url=QDRANT_URL, timeout=30)
         self.ollama_url = OLLAMA_BASE_URL
         self.processed_files = set()
+        self.qdrant = self._connect_with_retry()
         self._ensure_collection()
+
+    def _connect_with_retry(self, max_retries: int = 10, initial_delay: float = 1.0) -> QdrantClient:
+        """Connect to Qdrant with exponential backoff retry"""
+        delay = initial_delay
+        for attempt in range(1, max_retries + 1):
+            try:
+                print(f"🔌 Connecting to Qdrant at {QDRANT_URL} (attempt {attempt}/{max_retries})...")
+                client = QdrantClient(url=QDRANT_URL, timeout=30)
+                # Test connection
+                client.get_collections()
+                print(f"✅ Connected to Qdrant successfully")
+                return client
+            except Exception as e:
+                if attempt == max_retries:
+                    print(f"❌ Failed to connect to Qdrant after {max_retries} attempts: {e}")
+                    raise
+                print(f"⚠️  Connection attempt {attempt} failed: {e}")
+                print(f"⏳ Retrying in {delay:.1f} seconds...")
+                time.sleep(delay)
+                delay = min(delay * 2, 30.0)  # Exponential backoff, max 30s
 
     def _collection_exists(self, name: str) -> bool:
         """Check if collection exists"""

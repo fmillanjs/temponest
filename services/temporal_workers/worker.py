@@ -26,18 +26,35 @@ TEMPORAL_NAMESPACE = os.getenv("TEMPORAL_NAMESPACE", "default")
 TASK_QUEUE = "agentic-task-queue"
 
 
+async def connect_with_retry(max_retries: int = 10, initial_delay: float = 1.0) -> Client:
+    """Connect to Temporal with exponential backoff retry"""
+    delay = initial_delay
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"🔌 Connecting to Temporal at {TEMPORAL_HOST} (attempt {attempt}/{max_retries})...")
+            client = await Client.connect(
+                TEMPORAL_HOST,
+                namespace=TEMPORAL_NAMESPACE
+            )
+            print(f"✅ Connected to Temporal namespace: {TEMPORAL_NAMESPACE}")
+            return client
+        except Exception as e:
+            if attempt == max_retries:
+                print(f"❌ Failed to connect to Temporal after {max_retries} attempts: {e}")
+                raise
+            print(f"⚠️  Connection attempt {attempt} failed: {e}")
+            print(f"⏳ Retrying in {delay:.1f} seconds...")
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 30.0)  # Exponential backoff, max 30s
+
+
 async def main():
     """Start the Temporal worker"""
 
-    print(f"🔌 Connecting to Temporal at {TEMPORAL_HOST}...")
+    # Connect to Temporal with retry logic
+    client = await connect_with_retry()
 
-    # Connect to Temporal
-    client = await Client.connect(
-        TEMPORAL_HOST,
-        namespace=TEMPORAL_NAMESPACE
-    )
-
-    print(f"✅ Connected to Temporal namespace: {TEMPORAL_NAMESPACE}")
+    print(f"✅ Connection established to Temporal")
 
     # Create worker
     worker = Worker(

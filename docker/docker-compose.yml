@@ -32,6 +32,7 @@ services:
       - "5434:5432"
     networks:
       - agentic-network
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -45,6 +46,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   # Redis - Caching and Rate Limiting
   redis:
@@ -57,6 +59,7 @@ services:
     networks:
       - agentic-network
     command: redis-server --appendonly yes
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -70,6 +73,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   # Auth Service - Authentication and Authorization
   auth:
@@ -129,6 +133,7 @@ services:
       - "8080:8080"
     networks:
       - agentic-network
+    restart: unless-stopped
     volumes:
       - temporal-data:/etc/temporal
     healthcheck:
@@ -136,6 +141,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+      start_period: 60s
 
   # Qdrant Vector Database
   qdrant:
@@ -148,6 +154,7 @@ services:
       - qdrant-data:/qdrant/storage
     networks:
       - agentic-network
+    restart: unless-stopped
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
     deploy:
@@ -163,6 +170,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   # Langfuse - LLM Observability
   langfuse:
@@ -181,6 +189,7 @@ services:
       - TELEMETRY_ENABLED=${LANGFUSE_TELEMETRY_ENABLED:-false}
     networks:
       - agentic-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://$(hostname -i):3000/api/public/health || exit 1"]
       interval: 10s
@@ -198,6 +207,7 @@ services:
       - ollama-data:/root/.ollama
     networks:
       - agentic-network
+    restart: unless-stopped
     environment:
       - OLLAMA_HOST=0.0.0.0
     deploy:
@@ -339,6 +349,12 @@ services:
     networks:
       - agentic-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep '[p]ython.*worker.py' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # Approval UI - Web Interface for Human Approvals
   approval-ui:
@@ -437,6 +453,12 @@ services:
     networks:
       - agentic-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep '[p]ython.*ingest.py' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # Prometheus - Metrics Collection
   agentic-prometheus:
