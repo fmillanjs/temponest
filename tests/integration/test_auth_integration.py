@@ -47,8 +47,9 @@ async def test_authenticated_scheduler_access(authenticated_session, scheduler_c
     - Auth token is accepted by Scheduler service
     - User can list their schedules
     """
+    # Remove trailing slash to avoid 307 redirect
     response = await authenticated_session["client"].get(
-        f"{scheduler_client['base_url']}/schedules/",
+        f"{scheduler_client['base_url']}/schedules",
         headers=authenticated_session["headers"]
     )
 

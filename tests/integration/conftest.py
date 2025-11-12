@@ -78,7 +78,8 @@ async def test_user_credentials():
     return {
         "email": "integration-test@example.com",
         "password": "Integration123!Test",
-        "tenant_id": "integration-test-tenant"
+        "full_name": "Integration Test User",
+        "tenant_id": None  # Auto-create tenant
     }
 
 
@@ -91,19 +92,23 @@ async def authenticated_session(http_client, auth_client, test_user_credentials)
         Dict with client, access_token, and user info
     """
     # Try to register user (may already exist)
+    # Skip registration on rate limit or if user likely exists
     try:
         register_response = await http_client.post(
             f"{auth_client['base_url']}/auth/register",
             json={
                 "email": test_user_credentials["email"],
                 "password": test_user_credentials["password"],
+                "full_name": test_user_credentials["full_name"],
                 "tenant_id": test_user_credentials["tenant_id"]
             }
         )
-        if register_response.status_code not in [200, 201, 409]:
-            pytest.skip(f"Failed to register test user: {register_response.text}")
-    except Exception:
-        # User may already exist, continue to login
+        # Accept 409 (user exists) and 429 (rate limit) - just try login
+        if register_response.status_code not in [200, 201, 409, 429]:
+            # Only skip if it's a real error, not conflict or rate limit
+            pass  # Continue to login anyway
+    except Exception as e:
+        # User may already exist or network error, continue to login
         pass
 
     # Login to get access token
@@ -129,7 +134,7 @@ async def authenticated_session(http_client, auth_client, test_user_credentials)
             "client": http_client,
             "access_token": access_token,
             "user_id": auth_data.get("user_id"),
-            "tenant_id": test_user_credentials["tenant_id"],
+            "tenant_id": auth_data.get("user", {}).get("tenant_id") or auth_data.get("tenant_id"),
             "headers": {"Authorization": f"Bearer {access_token}"}
         }
     except Exception as e:
@@ -265,7 +270,8 @@ async def second_test_user():
     return {
         "email": "integration-test-2@example.com",
         "password": "Integration123!Test2",
-        "tenant_id": "integration-test-tenant-2"
+        "full_name": "Integration Test User 2",
+        "tenant_id": None  # Auto-create separate tenant
     }
 
 
@@ -275,18 +281,23 @@ async def second_authenticated_session(http_client, auth_client, second_test_use
     Second authenticated session for multi-tenant testing.
     """
     # Try to register user (may already exist)
+    # Skip registration on rate limit or if user likely exists
     try:
         register_response = await http_client.post(
             f"{auth_client['base_url']}/auth/register",
             json={
                 "email": second_test_user["email"],
                 "password": second_test_user["password"],
+                "full_name": second_test_user["full_name"],
                 "tenant_id": second_test_user["tenant_id"]
             }
         )
-        if register_response.status_code not in [200, 201, 409]:
-            pytest.skip(f"Failed to register second test user: {register_response.text}")
-    except Exception:
+        # Accept 409 (user exists) and 429 (rate limit) - just try login
+        if register_response.status_code not in [200, 201, 409, 429]:
+            # Only skip if it's a real error, not conflict or rate limit
+            pass  # Continue to login anyway
+    except Exception as e:
+        # User may already exist or network error, continue to login
         pass
 
     # Login to get access token
@@ -312,7 +323,7 @@ async def second_authenticated_session(http_client, auth_client, second_test_use
             "client": http_client,
             "access_token": access_token,
             "user_id": auth_data.get("user_id"),
-            "tenant_id": second_test_user["tenant_id"],
+            "tenant_id": auth_data.get("user", {}).get("tenant_id") or auth_data.get("tenant_id"),
             "headers": {"Authorization": f"Bearer {access_token}"}
         }
     except Exception as e:
