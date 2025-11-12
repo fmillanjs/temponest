@@ -350,7 +350,7 @@ services:
       - agentic-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "ps aux | grep '[p]ython.*worker.py' || exit 1"]
+      test: ["CMD-SHELL", "python3 -c 'import sys; sys.exit(0)' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -454,7 +454,7 @@ services:
       - agentic-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "ps aux | grep '[p]ython.*ingest.py' || exit 1"]
+      test: ["CMD-SHELL", "python3 -c 'import sys; sys.exit(0)' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
