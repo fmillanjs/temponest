@@ -1,12 +1,13 @@
 # Stage 1: Builder - Install dependencies
-FROM python:3.11-slim AS builder
+FROM python:3.11-alpine AS builder
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install build dependencies for Alpine
+RUN apk add --no-cache \
     gcc \
-    && rm -rf /var/lib/apt/lists/*
+    musl-dev \
+    libffi-dev
 
 # Copy requirements and install to a virtual environment
 COPY requirements.txt .
@@ -16,14 +17,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime - Minimal production image
-FROM python:3.11-slim AS runtime
+FROM python:3.11-alpine AS runtime
 
 WORKDIR /app
 
 # Install only runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache curl
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
