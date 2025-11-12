@@ -252,7 +252,7 @@ services:
       - MODEL_MAX_TOKENS=${MODEL_MAX_TOKENS:-2048}
       - MODEL_SEED=${MODEL_SEED:-42}
     volumes:
-      - ../services/agents/app:/app
+      - ../services/agents/app:/app/app
       - ./agent-output:/output
     networks:
       - agentic-network
