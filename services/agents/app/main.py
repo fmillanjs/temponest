@@ -15,9 +15,12 @@ import asyncpg
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 import tiktoken
 
 from app.settings import settings
+from app.limiter import limiter
 from app.agents.factory import AgentFactory
 from app.memory.rag import RAGMemory
 from app.memory.langfuse_tracer import LangfuseTracer
@@ -355,6 +358,12 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Add rate limiter to app state
+app.state.limiter = limiter
+
+# Add rate limit exception handler
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -388,7 +397,7 @@ app.mount("/metrics", metrics_app)
 
 # Token counting utility
 def count_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
-    """Count tokens in text using tiktoken"""
+    """Count tokens in text using tiktoken (synchronous)"""
     try:
         encoding = tiktoken.encoding_for_model(model)
     except KeyError:
@@ -396,10 +405,21 @@ def count_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
     return len(encoding.encode(text))
 
 
+async def count_tokens_async(text: str, model: str = "gpt-3.5-turbo") -> int:
+    """Count tokens in text using tiktoken (async wrapper)"""
+    return await asyncio.to_thread(count_tokens, text, model)
+
+
 # Guardrail: Budget enforcement
 def enforce_budget(text: str, budget: int = settings.BUDGET_TOKENS_PER_TASK) -> bool:
     """Check if text fits within token budget"""
     tokens = count_tokens(text)
+    return tokens <= budget
+
+
+async def enforce_budget_async(text: str, budget: int = settings.BUDGET_TOKENS_PER_TASK) -> bool:
+    """Check if text fits within token budget (async)"""
+    tokens = await count_tokens_async(text)
     return tokens <= budget
 
 
@@ -547,8 +567,10 @@ async def health_check():
 
 
 @app.post("/overseer/run", response_model=AgentResponse)
+@limiter.limit("20/minute")
 async def run_overseer(
-    request: AgentRequest,
+    request: Request,
+    agent_request: AgentRequest,
     current_user: AuthContext = Depends(require_permission("agents:execute"))
 ):
     """
@@ -566,11 +588,11 @@ async def run_overseer(
         raise HTTPException(status_code=503, detail="Overseer agent not initialized")
 
     # Check idempotency
-    if request.idempotency_key and request.idempotency_key in idempotency_cache:
-        return idempotency_cache[request.idempotency_key]
+    if agent_request.idempotency_key and agent_request.idempotency_key in idempotency_cache:
+        return idempotency_cache[agent_request.idempotency_key]
 
     # Enforce budget
-    if not enforce_budget(request.task):
+    if not enforce_budget(agent_request.task):
         raise HTTPException(
             status_code=400,
             detail=f"Task exceeds token budget of {settings.BUDGET_TOKENS_PER_TASK}"
@@ -582,8 +604,8 @@ async def run_overseer(
     try:
         # Run agent
         result = await overseer_agent.execute(
-            task=request.task,
-            context=request.context or {},
+            task=agent_request.task,
+            context=agent_request.context or {},
             task_id=task_id
         )
 
@@ -600,12 +622,15 @@ async def run_overseer(
         if latency_ms > settings.LATENCY_SLO_MS:
             print(f"⚠️  SLO violated: {latency_ms}ms > {settings.LATENCY_SLO_MS}ms")
 
+        # Count tokens asynchronously
+        tokens_used = await count_tokens_async(str(result))
+
         response = AgentResponse(
             task_id=task_id,
             status="completed",
             result=result,
             citations=citations,
-            tokens_used=count_tokens(str(result)),
+            tokens_used=tokens_used,
             latency_ms=latency_ms,
             model_info={
                 "model": settings.get_model_for_agent("overseer"),
@@ -711,7 +736,8 @@ async def run_developer(
         if latency_ms > settings.LATENCY_SLO_MS:
             print(f"⚠️  SLO violated: {latency_ms}ms > {settings.LATENCY_SLO_MS}ms")
 
-        tokens_used = count_tokens(str(result))
+        # Count tokens asynchronously
+        tokens_used = await count_tokens_async(str(result))
 
         # Record costs
         cost_info = await record_execution_cost(
@@ -880,12 +906,15 @@ async def run_qa_tester(
         if latency_ms > settings.LATENCY_SLO_MS * 2:
             print(f"⚠️  SLO violated: {latency_ms}ms > {settings.LATENCY_SLO_MS * 2}ms")
 
+        # Count tokens asynchronously
+        tokens_used = await count_tokens_async(str(result))
+
         response = AgentResponse(
             task_id=task_id,
             status="completed",
             result=result,
             citations=citations,
-            tokens_used=count_tokens(str(result)),
+            tokens_used=tokens_used,
             latency_ms=latency_ms,
             model_info={
                 "model": settings.get_model_for_agent("developer"),
@@ -972,12 +1001,15 @@ async def run_devops(
         if latency_ms > settings.LATENCY_SLO_MS * 2:
             print(f"⚠️  SLO violated: {latency_ms}ms > {settings.LATENCY_SLO_MS * 2}ms")
 
+        # Count tokens asynchronously
+        tokens_used = await count_tokens_async(str(result))
+
         response = AgentResponse(
             task_id=task_id,
             status="completed",
             result=result,
             citations=citations,
-            tokens_used=count_tokens(str(result)),
+            tokens_used=tokens_used,
             latency_ms=latency_ms,
             model_info={
                 "model": settings.get_model_for_agent("developer"),
@@ -1064,12 +1096,15 @@ async def run_designer(
         if latency_ms > settings.LATENCY_SLO_MS * 2:
             print(f"⚠️  SLO violated: {latency_ms}ms > {settings.LATENCY_SLO_MS * 2}ms")
 
+        # Count tokens asynchronously
+        tokens_used = await count_tokens_async(str(result))
+
         response = AgentResponse(
             task_id=task_id,
             status="completed",
             result=result,
             citations=citations,
-            tokens_used=count_tokens(str(result)),
+            tokens_used=tokens_used,
             latency_ms=latency_ms,
             model_info={
                 "model": settings.get_model_for_agent("developer"),
@@ -1157,12 +1192,15 @@ async def run_security_auditor(
         if latency_ms > settings.LATENCY_SLO_MS * 2:
             print(f"⚠️  SLO violated: {latency_ms}ms > {settings.LATENCY_SLO_MS * 2}ms")
 
+        # Count tokens asynchronously
+        tokens_used = await count_tokens_async(str(result))
+
         response = AgentResponse(
             task_id=task_id,
             status="completed",
             result=result,
             citations=citations,
-            tokens_used=count_tokens(str(result)),
+            tokens_used=tokens_used,
             latency_ms=latency_ms,
             model_info={
                 "model": settings.get_model_for_agent("developer"),
@@ -1250,12 +1288,15 @@ async def run_ux_researcher(
         if latency_ms > settings.LATENCY_SLO_MS * 2:
             print(f"⚠️  SLO violated: {latency_ms}ms > {settings.LATENCY_SLO_MS * 2}ms")
 
+        # Count tokens asynchronously
+        tokens_used = await count_tokens_async(str(result))
+
         response = AgentResponse(
             task_id=task_id,
             status="completed",
             result=result,
             citations=citations,
-            tokens_used=count_tokens(str(result)),
+            tokens_used=tokens_used,
             latency_ms=latency_ms,
             model_info={
                 "model": settings.get_model_for_agent("developer"),

@@ -2,6 +2,7 @@
 Password hashing and verification using bcrypt.
 """
 
+import asyncio
 import bcrypt
 
 
@@ -40,3 +41,13 @@ class PasswordHandler:
         """Check if password hash needs to be updated (always False for now)"""
         # bcrypt hashes don't need rehashing in our current setup
         return False
+
+    @staticmethod
+    async def hash_password_async(password: str) -> str:
+        """Hash a plain text password (async wrapper)"""
+        return await asyncio.to_thread(PasswordHandler.hash_password, password)
+
+    @staticmethod
+    async def verify_password_async(plain_password: str, hashed_password: str) -> bool:
+        """Verify a password against its hash (async wrapper)"""
+        return await asyncio.to_thread(PasswordHandler.verify_password, plain_password, hashed_password)

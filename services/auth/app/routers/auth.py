@@ -39,8 +39,8 @@ async def login(request: Request, login_request: LoginRequest):
             detail="Incorrect email or password"
         )
 
-    # Verify password
-    if not PasswordHandler.verify_password(login_request.password, user["hashed_password"]):
+    # Verify password (async)
+    if not await PasswordHandler.verify_password_async(login_request.password, user["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
@@ -169,8 +169,8 @@ async def register(request: Request, register_request: RegisterRequest):
             detail="Email already registered"
         )
 
-    # Hash password
-    hashed_password = PasswordHandler.hash_password(register_request.password)
+    # Hash password (async)
+    hashed_password = await PasswordHandler.hash_password_async(register_request.password)
 
     # Determine tenant
     tenant_id = register_request.tenant_id
