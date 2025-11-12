@@ -36,11 +36,14 @@ async def test_create_schedule_for_agent(
         json={
             "name": "Test Agent Schedule",
             "agent_id": test_agent["id"],
+            "agent_name": test_agent.get("name", "Test Agent"),
+            "schedule_type": "cron",
             "cron_expression": "*/5 * * * *",  # Every 5 minutes
             "task_payload": {"message": "Scheduled task"},
             "is_active": False,  # Don't run automatically
             "tenant_id": authenticated_session["tenant_id"]
-        }
+        },
+        follow_redirects=True
     )
 
     assert response.status_code in [200, 201], \
@@ -236,11 +239,14 @@ async def test_delete_schedule_with_executions(
         json={
             "name": "Test Delete Schedule",
             "agent_id": test_agent["id"],
+            "agent_name": test_agent.get("name", "Test Agent"),
+            "schedule_type": "cron",
             "cron_expression": "0 0 * * *",
             "task_payload": {},
             "is_active": False,
             "tenant_id": authenticated_session["tenant_id"]
-        }
+        },
+        follow_redirects=True
     )
 
     assert create_response.status_code in [200, 201]
@@ -327,10 +333,13 @@ async def test_cron_expression_validation(
         json={
             "name": "Invalid Cron Schedule",
             "agent_id": test_agent["id"],
+            "agent_name": test_agent.get("name", "Test Agent"),
+            "schedule_type": "cron",
             "cron_expression": "invalid cron",
             "task_payload": {},
             "tenant_id": authenticated_session["tenant_id"]
-        }
+        },
+        follow_redirects=True
     )
 
     # Should fail validation (400 or 422)
@@ -422,11 +431,14 @@ async def test_schedule_with_complex_payload(
         json={
             "name": "Complex Payload Schedule",
             "agent_id": test_agent["id"],
+            "agent_name": test_agent.get("name", "Test Agent"),
+            "schedule_type": "cron",
             "cron_expression": "0 0 * * *",
             "task_payload": complex_payload,
             "is_active": False,
             "tenant_id": authenticated_session["tenant_id"]
-        }
+        },
+        follow_redirects=True
     )
 
     assert create_response.status_code in [200, 201]

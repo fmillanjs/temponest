@@ -233,6 +233,8 @@ async def test_schedule(authenticated_session, scheduler_client, test_agent):
             json={
                 "name": "Integration Test Schedule",
                 "agent_id": test_agent["id"],  # Use department agent ID
+                "agent_name": test_agent.get("name", "Integration Test Agent"),  # Required field
+                "schedule_type": "cron",  # Required field
                 "agent_path": test_agent.get("path"),  # Add department path
                 "cron_expression": "0 0 * * *",  # Daily at midnight
                 "task_payload": {"test": "data", "department": test_agent.get("department")},
