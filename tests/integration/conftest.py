@@ -20,14 +20,14 @@ APPROVAL_UI_URL = os.getenv("APPROVAL_UI_URL", "http://localhost:9001")
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def http_client():
     """Create HTTP client for API calls"""
     async with httpx.AsyncClient(timeout=30.0) as client:
         yield client
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def auth_client(http_client):
     """Client for Auth service"""
     return {
@@ -36,7 +36,7 @@ async def auth_client(http_client):
     }
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def agents_client(http_client):
     """Client for Agents service"""
     return {
@@ -45,7 +45,7 @@ async def agents_client(http_client):
     }
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def scheduler_client(http_client):
     """Client for Scheduler service"""
     return {
@@ -54,7 +54,7 @@ async def scheduler_client(http_client):
     }
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def approval_ui_client(http_client):
     """Client for Approval UI service"""
     return {
@@ -63,7 +63,7 @@ async def approval_ui_client(http_client):
     }
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def qdrant_client(http_client):
     """Client for Qdrant service"""
     return {
@@ -72,7 +72,7 @@ async def qdrant_client(http_client):
     }
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def test_user_credentials():
     """Test user credentials for authentication"""
     return {
@@ -82,7 +82,7 @@ async def test_user_credentials():
     }
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def authenticated_session(http_client, auth_client, test_user_credentials):
     """
     Create authenticated session with access token.
@@ -223,7 +223,7 @@ async def test_schedule(authenticated_session, scheduler_client, test_agent):
                 pass  # Best effort cleanup
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def service_health_check(http_client):
     """
     Check health of all services before running tests.
@@ -255,7 +255,7 @@ async def service_health_check(http_client):
     return services_status
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def second_test_user():
     """
     Second test user for multi-tenant testing.
@@ -269,7 +269,7 @@ async def second_test_user():
     }
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def second_authenticated_session(http_client, auth_client, second_test_user):
     """
     Second authenticated session for multi-tenant testing.
