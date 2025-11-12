@@ -15,20 +15,31 @@ from db import DatabaseManager
 from scheduler import TaskScheduler
 from models import SchedulerHealthResponse
 from routers import schedules
+from auth_client import AuthClient
+from auth_middleware import set_auth_client
 
 
 # Global state
 db_manager: Optional[DatabaseManager] = None
 task_scheduler: Optional[TaskScheduler] = None
+auth_client: Optional[AuthClient] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic"""
-    global db_manager, task_scheduler
+    global db_manager, task_scheduler, auth_client
 
     # Startup
     print("🚀 Starting Scheduler Service...")
+
+    # Initialize auth client
+    auth_client = AuthClient(
+        auth_service_url=settings.auth_service_url,
+        jwt_secret=settings.jwt_secret_key
+    )
+    set_auth_client(auth_client)
+    print("✅ Auth client initialized")
 
     # Initialize database
     db_manager = DatabaseManager()
@@ -52,6 +63,10 @@ async def lifespan(app: FastAPI):
     # Close database connection
     if db_manager:
         await db_manager.disconnect()
+
+    # Close auth client
+    if auth_client:
+        await auth_client.close()
 
     print("✅ Scheduler Service stopped")
 

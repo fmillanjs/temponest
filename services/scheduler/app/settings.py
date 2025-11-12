@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     # Agent Service
     agent_service_url: str = "http://localhost:9000"
 
+    # Auth Service
+    auth_service_url: str = "http://auth:9002"
+
     # JWT Authentication
     jwt_secret_key: str = "CHANGE-ME-IN-PRODUCTION-USE-LONG-RANDOM-STRING"
     jwt_algorithm: str = "HS256"

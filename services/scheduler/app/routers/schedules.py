@@ -15,6 +15,8 @@ from models import (
 )
 from db import DatabaseManager
 from scheduler import TaskScheduler
+from auth_middleware import get_current_user
+from auth_client import AuthContext
 
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
@@ -33,29 +35,16 @@ def get_scheduler() -> TaskScheduler:
     return task_scheduler
 
 
-def get_current_tenant_id() -> UUID:
-    """Get current tenant ID from auth context"""
-    # TODO: Extract from JWT token in Authorization header
-    # For now, returning a placeholder
-    return UUID("00000000-0000-0000-0000-000000000000")
-
-
-def get_current_user_id() -> UUID:
-    """Get current user ID from auth context"""
-    # TODO: Extract from JWT token in Authorization header
-    # For now, returning a placeholder
-    return UUID("00000000-0000-0000-0000-000000000000")
-
-
 @router.post("", response_model=ScheduledTaskResponse, status_code=201)
 async def create_scheduled_task(
     request: CreateScheduledTaskRequest,
     db: DatabaseManager = Depends(get_db_manager),
     scheduler: TaskScheduler = Depends(get_scheduler),
-    tenant_id: UUID = Depends(get_current_tenant_id),
-    user_id: UUID = Depends(get_current_user_id)
+    auth_context: AuthContext = Depends(get_current_user)
 ):
     """Create a new scheduled task"""
+    tenant_id = UUID(auth_context.tenant_id)
+    user_id = UUID(auth_context.user_id)
 
     # Validate schedule configuration
     if request.schedule_type.value == "cron" and not request.cron_expression:
@@ -103,9 +92,10 @@ async def list_scheduled_tasks(
     page_size: int = Query(50, ge=1, le=100),
     is_active: Optional[bool] = None,
     db: DatabaseManager = Depends(get_db_manager),
-    tenant_id: UUID = Depends(get_current_tenant_id)
+    auth_context: AuthContext = Depends(get_current_user)
 ):
     """List scheduled tasks for the current tenant"""
+    tenant_id = UUID(auth_context.tenant_id)
 
     tasks, total = await db.list_scheduled_tasks(
         tenant_id=tenant_id,
@@ -126,9 +116,10 @@ async def list_scheduled_tasks(
 async def get_scheduled_task(
     task_id: UUID,
     db: DatabaseManager = Depends(get_db_manager),
-    tenant_id: UUID = Depends(get_current_tenant_id)
+    auth_context: AuthContext = Depends(get_current_user)
 ):
     """Get a scheduled task by ID"""
+    tenant_id = UUID(auth_context.tenant_id)
 
     task = await db.get_scheduled_task(task_id, tenant_id)
     if not task:
@@ -142,9 +133,10 @@ async def update_scheduled_task(
     task_id: UUID,
     request: UpdateScheduledTaskRequest,
     db: DatabaseManager = Depends(get_db_manager),
-    tenant_id: UUID = Depends(get_current_tenant_id)
+    auth_context: AuthContext = Depends(get_current_user)
 ):
     """Update a scheduled task"""
+    tenant_id = UUID(auth_context.tenant_id)
 
     # Get current task
     task = await db.get_scheduled_task(task_id, tenant_id)
@@ -168,9 +160,10 @@ async def update_scheduled_task(
 async def delete_scheduled_task(
     task_id: UUID,
     db: DatabaseManager = Depends(get_db_manager),
-    tenant_id: UUID = Depends(get_current_tenant_id)
+    auth_context: AuthContext = Depends(get_current_user)
 ):
     """Delete a scheduled task"""
+    tenant_id = UUID(auth_context.tenant_id)
 
     success = await db.delete_scheduled_task(task_id, tenant_id)
     if not success:
@@ -181,9 +174,10 @@ async def delete_scheduled_task(
 async def trigger_scheduled_task(
     task_id: UUID,
     scheduler: TaskScheduler = Depends(get_scheduler),
-    tenant_id: UUID = Depends(get_current_tenant_id)
+    auth_context: AuthContext = Depends(get_current_user)
 ):
     """Manually trigger a scheduled task to run immediately"""
+    tenant_id = UUID(auth_context.tenant_id)
 
     success = await scheduler.trigger_task_now(task_id, tenant_id)
     if not success:
@@ -196,9 +190,10 @@ async def trigger_scheduled_task(
 async def pause_scheduled_task(
     task_id: UUID,
     db: DatabaseManager = Depends(get_db_manager),
-    tenant_id: UUID = Depends(get_current_tenant_id)
+    auth_context: AuthContext = Depends(get_current_user)
 ):
     """Pause a scheduled task"""
+    tenant_id = UUID(auth_context.tenant_id)
 
     task = await db.get_scheduled_task(task_id, tenant_id)
     if not task:
@@ -214,9 +209,10 @@ async def pause_scheduled_task(
 async def resume_scheduled_task(
     task_id: UUID,
     db: DatabaseManager = Depends(get_db_manager),
-    tenant_id: UUID = Depends(get_current_tenant_id)
+    auth_context: AuthContext = Depends(get_current_user)
 ):
     """Resume a paused scheduled task"""
+    tenant_id = UUID(auth_context.tenant_id)
 
     task = await db.get_scheduled_task(task_id, tenant_id)
     if not task:
@@ -234,9 +230,10 @@ async def list_task_executions(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: DatabaseManager = Depends(get_db_manager),
-    tenant_id: UUID = Depends(get_current_tenant_id)
+    auth_context: AuthContext = Depends(get_current_user)
 ):
     """List executions for a scheduled task"""
+    tenant_id = UUID(auth_context.tenant_id)
 
     # Verify task exists
     task = await db.get_scheduled_task(task_id, tenant_id)
