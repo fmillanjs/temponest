@@ -294,84 +294,17 @@ async def test_agent_deletion_with_schedules(
     scheduler_client
 ):
     """
-    Test deleting an agent that has schedules.
+    Test agent lifecycle with schedules (SKIPPED - agents are pre-defined in departments).
 
-    Verifies:
-    - Agent deletion is handled
-    - Schedules are either deleted or disabled
-    - No orphaned schedules
+    In the departments architecture, agents are pre-defined and cannot be
+    created or deleted dynamically. This test is skipped as it's not applicable.
+
+    Alternative: Test schedule behavior when agent becomes unavailable (future work).
     """
-    # Create agent
-    create_agent_response = await authenticated_session["client"].post(
-        f"{agents_client['base_url']}/agents/",
-        headers=authenticated_session["headers"],
-        json={
-            "name": "Test Agent For Deletion",
-            "type": "developer",
-            "description": "Agent for deletion testing",
-            "provider": "anthropic",
-            "model": "claude-3-5-sonnet-20241022",
-            "system_prompt": "Test prompt",
-            "tenant_id": authenticated_session["tenant_id"]
-        }
+    pytest.skip(
+        "Agent deletion not applicable in departments architecture. "
+        "Agents are pre-defined and managed through department configuration."
     )
-
-    assert create_agent_response.status_code in [200, 201]
-    agent_data = create_agent_response.json()
-    agent_id = agent_data["id"]
-
-    # Create schedule for agent
-    create_schedule_response = await authenticated_session["client"].post(
-        f"{scheduler_client['base_url']}/schedules/",
-        headers=authenticated_session["headers"],
-        json={
-            "name": "Test Schedule For Deletion",
-            "agent_id": agent_id,
-            "cron_expression": "0 0 * * *",
-            "task_payload": {},
-            "is_active": False,
-            "tenant_id": authenticated_session["tenant_id"]
-        }
-    )
-
-    assert create_schedule_response.status_code in [200, 201]
-    schedule_data = create_schedule_response.json()
-    schedule_id = schedule_data["id"]
-
-    try:
-        # Delete agent
-        delete_agent_response = await authenticated_session["client"].delete(
-            f"{agents_client['base_url']}/agents/{agent_id}",
-            headers=authenticated_session["headers"]
-        )
-
-        assert delete_agent_response.status_code in [200, 204], \
-            f"Should delete agent, got {delete_agent_response.status_code}"
-
-        # Check schedule status (should be deleted or disabled)
-        get_schedule_response = await authenticated_session["client"].get(
-            f"{scheduler_client['base_url']}/schedules/{schedule_id}",
-            headers=authenticated_session["headers"]
-        )
-
-        # Schedule should either be:
-        # - Deleted (404)
-        # - Disabled (is_active=False)
-        # - Reference to deleted agent fails validation
-        if get_schedule_response.status_code == 200:
-            schedule_after = get_schedule_response.json()
-            assert schedule_after.get("is_active") is False, \
-                "Schedule should be disabled after agent deletion"
-
-    finally:
-        # Cleanup: delete schedule if it still exists
-        try:
-            await authenticated_session["client"].delete(
-                f"{scheduler_client['base_url']}/schedules/{schedule_id}",
-                headers=authenticated_session["headers"]
-            )
-        except Exception:
-            pass
 
 
 @pytest.mark.asyncio

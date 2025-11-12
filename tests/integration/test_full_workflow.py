@@ -35,13 +35,14 @@ async def test_full_agent_execution_workflow(
     - Execution results are returned
     - Costs are tracked
     """
-    # Execute the agent
+    # Execute the agent using specialized endpoint
+    endpoint = test_agent.get("execution_endpoint", f"/{test_agent['id']}/run")
     execute_response = await authenticated_session["client"].post(
-        f"{agents_client['base_url']}/agents/{test_agent['id']}/execute",
+        f"{agents_client['base_url']}{endpoint}",
         headers=authenticated_session["headers"],
         json={
-            "message": "Hello! This is an integration test. Please respond briefly.",
-            "max_tokens": 100
+            "task": "Hello! This is an integration test. Please respond briefly.",
+            "context": {"max_tokens": 100}
         },
         timeout=60.0  # Extended timeout for actual LLM call
     )
@@ -142,116 +143,20 @@ async def test_agent_crud_workflow(
     agents_client
 ):
     """
-    Test complete CRUD workflow for agents.
+    Test agent lifecycle (SKIPPED - agents are pre-defined in departments).
 
-    Steps:
-    1. Create agent
-    2. Read agent
-    3. Update agent
-    4. List agents
-    5. Delete agent
+    In the departments architecture, agents are pre-defined and cannot be
+    created, updated, or deleted dynamically through CRUD operations.
 
-    Verifies:
-    - All CRUD operations work together
-    - Data consistency across operations
+    Instead, agents are configured in the department structure and
+    accessed via the departments API.
+
+    Alternative: Test departments CRUD workflow (future work).
     """
-    # 1. Create agent
-    create_response = await authenticated_session["client"].post(
-        f"{agents_client['base_url']}/agents/",
-        headers=authenticated_session["headers"],
-        json={
-            "name": "CRUD Workflow Agent",
-            "type": "developer",
-            "description": "Testing CRUD workflow",
-            "provider": "anthropic",
-            "model": "claude-3-5-sonnet-20241022",
-            "system_prompt": "You are a test agent.",
-            "tenant_id": authenticated_session["tenant_id"]
-        }
+    pytest.skip(
+        "Agent CRUD not applicable in departments architecture. "
+        "Agents are pre-defined in department configuration and accessed via /departments/ API."
     )
-
-    assert create_response.status_code in [200, 201]
-    created_agent = create_response.json()
-    agent_id = created_agent["id"]
-
-    try:
-        # 2. Read agent
-        read_response = await authenticated_session["client"].get(
-            f"{agents_client['base_url']}/agents/{agent_id}",
-            headers=authenticated_session["headers"]
-        )
-
-        assert read_response.status_code == 200
-        read_agent = read_response.json()
-        assert read_agent["id"] == agent_id
-        assert read_agent["name"] == "CRUD Workflow Agent"
-
-        # 3. Update agent
-        update_response = await authenticated_session["client"].put(
-            f"{agents_client['base_url']}/agents/{agent_id}",
-            headers=authenticated_session["headers"],
-            json={
-                "name": "Updated CRUD Workflow Agent",
-                "description": "Updated description",
-                "system_prompt": "You are an updated test agent."
-            }
-        )
-
-        if update_response.status_code != 404:  # Update endpoint may not exist
-            assert update_response.status_code == 200, \
-                f"Update should succeed, got {update_response.status_code}"
-
-            updated_agent = update_response.json()
-            assert updated_agent["name"] == "Updated CRUD Workflow Agent", \
-                "Name should be updated"
-
-        # 4. List agents (should include our agent)
-        list_response = await authenticated_session["client"].get(
-            f"{agents_client['base_url']}/agents/",
-            headers=authenticated_session["headers"]
-        )
-
-        assert list_response.status_code in [200, 404]
-        if list_response.status_code == 200:
-            agents_list = list_response.json()
-            # May be paginated
-            if isinstance(agents_list, list):
-                agent_ids = [a["id"] for a in agents_list]
-            elif "items" in agents_list:
-                agent_ids = [a["id"] for a in agents_list["items"]]
-            else:
-                agent_ids = []
-
-            assert agent_id in agent_ids, "Created agent should be in list"
-
-        # 5. Delete agent
-        delete_response = await authenticated_session["client"].delete(
-            f"{agents_client['base_url']}/agents/{agent_id}",
-            headers=authenticated_session["headers"]
-        )
-
-        assert delete_response.status_code in [200, 204], \
-            f"Delete should succeed, got {delete_response.status_code}"
-
-        # Verify deletion
-        verify_response = await authenticated_session["client"].get(
-            f"{agents_client['base_url']}/agents/{agent_id}",
-            headers=authenticated_session["headers"]
-        )
-
-        assert verify_response.status_code == 404, \
-            "Deleted agent should return 404"
-
-    except Exception as e:
-        # Cleanup on failure
-        try:
-            await authenticated_session["client"].delete(
-                f"{agents_client['base_url']}/agents/{agent_id}",
-                headers=authenticated_session["headers"]
-            )
-        except Exception:
-            pass
-        raise e
 
 
 @pytest.mark.asyncio
@@ -392,14 +297,15 @@ async def test_concurrent_agent_executions(
     - Each execution is tracked independently
     - No race conditions or resource conflicts
     """
-    # Execute agent 3 times concurrently
+    # Execute agent 3 times concurrently using specialized endpoint
+    endpoint = test_agent.get("execution_endpoint", f"/{test_agent['id']}/run")
     tasks = [
         authenticated_session["client"].post(
-            f"{agents_client['base_url']}/agents/{test_agent['id']}/execute",
+            f"{agents_client['base_url']}{endpoint}",
             headers=authenticated_session["headers"],
             json={
-                "message": f"Concurrent test #{i+1}",
-                "max_tokens": 50
+                "task": f"Concurrent test #{i+1}. Respond briefly.",
+                "context": {"max_tokens": 50}
             },
             timeout=60.0
         )
@@ -444,21 +350,7 @@ async def test_error_handling_workflow(
     - Error messages are informative
     - System remains stable after errors
     """
-    # Try to create agent with invalid data
-    invalid_agent_response = await authenticated_session["client"].post(
-        f"{agents_client['base_url']}/agents/",
-        headers=authenticated_session["headers"],
-        json={
-            "name": "",  # Invalid: empty name
-            "type": "invalid_type",  # Invalid type
-            "tenant_id": authenticated_session["tenant_id"]
-        }
-    )
-
-    assert invalid_agent_response.status_code in [400, 422], \
-        f"Invalid agent data should be rejected, got {invalid_agent_response.status_code}"
-
-    # Try to create schedule with invalid cron
+    # Try to create schedule with invalid cron expression
     invalid_schedule_response = await authenticated_session["client"].post(
         f"{scheduler_client['base_url']}/schedules/",
         headers=authenticated_session["headers"],
@@ -473,34 +365,18 @@ async def test_error_handling_workflow(
     assert invalid_schedule_response.status_code in [400, 404, 422], \
         f"Invalid schedule data should be rejected, got {invalid_schedule_response.status_code}"
 
-    # System should still be functional - create valid agent
-    valid_agent_response = await authenticated_session["client"].post(
-        f"{agents_client['base_url']}/agents/",
-        headers=authenticated_session["headers"],
-        json={
-            "name": "Valid Agent After Error",
-            "type": "developer",
-            "description": "Testing recovery after errors",
-            "provider": "anthropic",
-            "model": "claude-3-5-sonnet-20241022",
-            "system_prompt": "Test",
-            "tenant_id": authenticated_session["tenant_id"]
-        }
+    # System should still be functional - list departments
+    departments_response = await authenticated_session["client"].get(
+        f"{agents_client['base_url']}/departments/",
+        headers=authenticated_session["headers"]
     )
 
-    assert valid_agent_response.status_code in [200, 201], \
+    assert departments_response.status_code == 200, \
         "System should still work after validation errors"
 
-    # Cleanup
-    if valid_agent_response.status_code in [200, 201]:
-        agent_data = valid_agent_response.json()
-        try:
-            await authenticated_session["client"].delete(
-                f"{agents_client['base_url']}/agents/{agent_data['id']}",
-                headers=authenticated_session["headers"]
-            )
-        except Exception:
-            pass
+    departments_data = departments_response.json()
+    assert "departments" in departments_data, \
+        "System should return departments list after error recovery"
 
 
 @pytest.mark.asyncio
@@ -517,13 +393,14 @@ async def test_workflow_with_cost_tracking(
     - Costs can be retrieved
     - Cost summaries are available
     """
-    # Execute agent (generates cost)
+    # Execute agent (generates cost) using specialized endpoint
+    endpoint = test_agent.get("execution_endpoint", f"/{test_agent['id']}/run")
     execute_response = await authenticated_session["client"].post(
-        f"{agents_client['base_url']}/agents/{test_agent['id']}/execute",
+        f"{agents_client['base_url']}{endpoint}",
         headers=authenticated_session["headers"],
         json={
-            "message": "Brief test for cost tracking",
-            "max_tokens": 50
+            "task": "Brief test for cost tracking. Respond with one sentence.",
+            "context": {"max_tokens": 50}
         },
         timeout=60.0
     )

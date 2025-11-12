@@ -169,45 +169,51 @@ async def authenticated_session(http_client, auth_client, test_user_credentials)
 @pytest_asyncio.fixture(scope="function")
 async def test_agent(authenticated_session, agents_client):
     """
-    Create a test agent for integration tests.
+    Get a test agent from departments API for integration tests.
 
-    Automatically cleans up after the test.
+    Uses existing developer agent from the engineering department.
+    No cleanup needed since we use pre-defined department agents.
     """
-    agent_id = None
     try:
-        # Create test agent
-        create_response = await authenticated_session["client"].post(
-            f"{agents_client['base_url']}/agents/",
-            headers=authenticated_session["headers"],
-            json={
-                "name": "Integration Test Agent",
-                "type": "developer",
-                "description": "Agent for integration testing",
-                "provider": "anthropic",
-                "model": "claude-3-5-sonnet-20241022",
-                "system_prompt": "You are a helpful developer agent for testing.",
-                "tenant_id": authenticated_session["tenant_id"]
-            }
+        # Get engineering department agents
+        dept_response = await authenticated_session["client"].get(
+            f"{agents_client['base_url']}/departments/engineering/agents",
+            headers=authenticated_session["headers"]
         )
 
-        if create_response.status_code not in [200, 201]:
-            pytest.skip(f"Failed to create test agent: {create_response.text}")
+        if dept_response.status_code == 200:
+            agents_data = dept_response.json()
+            if agents_data.get("agents") and len(agents_data["agents"]) > 0:
+                # Use first available agent (likely Developer)
+                agent_info = agents_data["agents"][0]
+                yield {
+                    "id": agent_info["id"],
+                    "name": agent_info["name"],
+                    "type": agent_info.get("role", "developer"),
+                    "department": "engineering",
+                    "path": f"engineering.{agent_info['id']}",
+                    "provider": agent_info.get("provider", "anthropic"),
+                    "model": agent_info.get("model", "claude-3-5-sonnet-20241022")
+                }
+                return
 
-        agent_data = create_response.json()
-        agent_id = agent_data.get("id")
+        # Fallback: Use developer agent directly (known to exist)
+        yield {
+            "id": "developer",
+            "name": "Developer Agent",
+            "type": "developer",
+            "department": "engineering",
+            "path": "engineering.developer",
+            "execution_endpoint": "/developer/run",
+            "provider": "anthropic",
+            "model": "claude-3-5-sonnet-20241022"
+        }
 
-        yield agent_data
+    except Exception as e:
+        # If departments API fails, skip tests that depend on agents
+        pytest.skip(f"Failed to get department agent: {str(e)}")
 
-    finally:
-        # Cleanup: delete test agent
-        if agent_id:
-            try:
-                await authenticated_session["client"].delete(
-                    f"{agents_client['base_url']}/agents/{agent_id}",
-                    headers=authenticated_session["headers"]
-                )
-            except Exception:
-                pass  # Best effort cleanup
+    # No cleanup needed - we're using existing department agents
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -215,22 +221,25 @@ async def test_schedule(authenticated_session, scheduler_client, test_agent):
     """
     Create a test schedule for integration tests.
 
+    Uses department agent ID from test_agent fixture.
     Automatically cleans up after the test.
     """
     schedule_id = None
     try:
-        # Create test schedule
+        # Create test schedule using department agent
         create_response = await authenticated_session["client"].post(
             f"{scheduler_client['base_url']}/schedules/",
             headers=authenticated_session["headers"],
             json={
                 "name": "Integration Test Schedule",
-                "agent_id": test_agent["id"],
+                "agent_id": test_agent["id"],  # Use department agent ID
+                "agent_path": test_agent.get("path"),  # Add department path
                 "cron_expression": "0 0 * * *",  # Daily at midnight
-                "task_payload": {"test": "data"},
+                "task_payload": {"test": "data", "department": test_agent.get("department")},
                 "is_active": False,  # Don't run automatically
                 "tenant_id": authenticated_session["tenant_id"]
-            }
+            },
+            follow_redirects=True
         )
 
         if create_response.status_code not in [200, 201]:
