@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { User, LogOut, Settings, Shield } from "lucide-react";
 import { useSession, signOut } from "@/lib/auth-client";
 import {
@@ -53,7 +54,13 @@ export function UserMenu() {
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-2 rounded-xl border border-base-200 bg-white px-3 py-2 text-sm hover:bg-base-50 focus:outline-none focus:ring-2 focus:ring-accent-info">
           {user.image ? (
-            <img src={user.image} alt={user.name || "User"} className="h-6 w-6 rounded-full" />
+            <Image
+              src={user.image}
+              alt={user.name || "User"}
+              width={24}
+              height={24}
+              className="h-6 w-6 rounded-full"
+            />
           ) : (
             <User className="h-4 w-4" />
           )}

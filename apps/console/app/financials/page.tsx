@@ -1,7 +1,23 @@
 'use client'
 
 import { useState } from 'react'
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import dynamic from 'next/dynamic'
+
+// Dynamically import chart components to reduce initial bundle size
+const FinancialsCharts = dynamic(
+  () => import('@/components/financials/FinancialsCharts').then((mod) => ({ default: mod.FinancialsCharts })),
+  {
+    loading: () => (
+      <div className="rounded-2xl border border-base-200 bg-white p-6 shadow-soft">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-base-200 rounded w-1/3"></div>
+          <div className="h-64 bg-base-200 rounded"></div>
+        </div>
+      </div>
+    ),
+    ssr: false,
+  }
+)
 
 type CalculatorModel = 'formbuilder' | 'analytics' | 'crm' | 'scheduler' | 'emailbuilder'
 
@@ -311,63 +327,8 @@ export default function FinancialsPage() {
         </div>
       )}
 
-      {/* Charts */}
-      {monthlyData.length > 0 && (
-        <div className="space-y-6">
-          {/* MRR Growth Chart */}
-          <div className="rounded-2xl border border-base-200 bg-white p-6 shadow-soft">
-            <h3 className="text-lg font-semibold text-base-900 mb-4">MRR Growth Over Time</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="month" stroke="#64748b" />
-                <YAxis stroke="#64748b" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                  formatter={(value: number) => `$${value.toLocaleString()}`}
-                />
-                <Legend />
-                <Line type="monotone" dataKey="mrr" stroke="#10b981" strokeWidth={2} name="MRR" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Customer Growth Chart */}
-          <div className="rounded-2xl border border-base-200 bg-white p-6 shadow-soft">
-            <h3 className="text-lg font-semibold text-base-900 mb-4">Customer Growth</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="month" stroke="#64748b" />
-                <YAxis stroke="#64748b" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                />
-                <Legend />
-                <Bar dataKey="customers" fill="#0ea5e9" name="Customers" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Cumulative Profit Chart */}
-          <div className="rounded-2xl border border-base-200 bg-white p-6 shadow-soft">
-            <h3 className="text-lg font-semibold text-base-900 mb-4">Cumulative Profit</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="month" stroke="#64748b" />
-                <YAxis stroke="#64748b" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                  formatter={(value: number) => `$${value.toLocaleString()}`}
-                />
-                <Legend />
-                <Line type="monotone" dataKey="cumulative" stroke="#f59e0b" strokeWidth={2} name="Cumulative Profit" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+      {/* Charts - Dynamically loaded to reduce initial bundle size */}
+      {monthlyData.length > 0 && <FinancialsCharts monthlyData={monthlyData} />}
 
       {/* Output Log */}
       {output && (
