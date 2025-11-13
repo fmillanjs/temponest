@@ -11,7 +11,7 @@ RUN apk add --no-cache \
     postgresql-dev
 
 # Copy requirements and install to a virtual environment
-COPY requirements.txt .
+COPY services/scheduler/requirements.txt .
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip && \
@@ -32,10 +32,10 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy application code
-COPY app/ /app/
+COPY services/scheduler/app/ /app/
 
 # Copy shared modules
-COPY ../../shared /app/shared
+COPY shared/ /app/shared/
 
 # Add shared modules to PYTHONPATH
 ENV PYTHONPATH="/app:${PYTHONPATH}"

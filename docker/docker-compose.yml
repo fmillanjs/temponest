@@ -267,8 +267,8 @@ services:
   # Agent Service - CrewAI with Overseer + Developer
   agents:
     build:
-      context: ../services/agents
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/agents/Dockerfile
     container_name: agentic-agents
     depends_on:
       postgres:
@@ -395,8 +395,8 @@ services:
   # Scheduler Service - Scheduled Task Execution
   scheduler:
     build:
-      context: ../services/scheduler
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/scheduler/Dockerfile
     container_name: agentic-scheduler
     depends_on:
       postgres:

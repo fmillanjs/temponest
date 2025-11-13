@@ -13,11 +13,11 @@ RUN apk add --no-cache \
     git
 
 # Copy requirements and install to a virtual environment
-COPY requirements.txt .
+COPY services/agents/requirements.txt .
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    PIP_DEFAULT_TIMEOUT=300 pip install --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime - Minimal production image
 FROM python:3.11-alpine AS runtime
@@ -34,10 +34,10 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy application code (preserve directory structure)
-COPY app/ /app/app/
+COPY services/agents/app/ /app/app/
 
 # Copy shared modules
-COPY ../../shared /app/shared
+COPY shared/ /app/shared/
 
 # Create output directory
 RUN mkdir -p /output
