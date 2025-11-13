@@ -164,14 +164,25 @@ async def lifespan(app: FastAPI):
 
     # Initialize database pool for cost tracking
     print("💾 Initializing cost tracking...")
+
+    async def setup_db_connection(conn):
+        """Setup database connection with optimized settings"""
+        await conn.execute("SET statement_timeout = '30s'")
+        await conn.execute("SET idle_in_transaction_session_timeout = '60s'")
+
     try:
+        # OPTIMIZED: Tuned connection pool for agents service (highest traffic)
         db_pool = await asyncpg.create_pool(
             settings.DATABASE_URL,
-            min_size=2,
-            max_size=10,
-            command_timeout=60
+            min_size=15,              # Increased from 2 (agents is highest traffic)
+            max_size=100,             # Increased from 10 (handle heavy load)
+            max_queries=50000,        # NEW: Recycle connections after 50k queries
+            max_inactive_connection_lifetime=300.0,  # NEW: Close idle connections after 5 min
+            command_timeout=30,       # Reduced from 60 (fail fast)
+            timeout=10.0,             # NEW: Max wait time for connection from pool
+            setup=setup_db_connection # NEW: Connection setup hook
         )
-        print("   ✅ Database pool created")
+        print("   ✅ Database pool created (pool: 15-100)")
 
         # Load pricing from database
         async with db_pool.acquire() as conn:

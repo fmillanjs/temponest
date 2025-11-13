@@ -15,15 +15,27 @@ class Database:
         self.pool: Optional[asyncpg.Pool] = None
 
     async def connect(self):
-        """Create connection pool"""
+        """Create connection pool with optimized settings"""
         if not self.pool:
+            # OPTIMIZED: Tuned connection pool for auth service (high traffic)
             self.pool = await asyncpg.create_pool(
                 settings.DATABASE_URL,
-                min_size=5,
-                max_size=20,
-                command_timeout=60
+                min_size=10,              # Increased from 5 (auth is high-traffic)
+                max_size=50,              # Increased from 20 (handle bursts)
+                max_queries=50000,        # NEW: Recycle connections after 50k queries
+                max_inactive_connection_lifetime=300.0,  # NEW: Close idle connections after 5 min
+                command_timeout=30,       # Reduced from 60 (fail fast)
+                timeout=10.0,             # NEW: Max wait time for connection from pool
+                setup=self._setup_connection  # NEW: Connection setup hook
             )
-            print(f"✅ Database connected: {settings.DATABASE_URL.split('@')[1]}")
+            print(f"✅ Database connected: {settings.DATABASE_URL.split('@')[1]} (pool: 10-50)")
+
+    async def _setup_connection(self, conn: asyncpg.Connection):
+        """Setup connection with optimized settings"""
+        # Set statement timeout to prevent long-running queries
+        await conn.execute("SET statement_timeout = '30s'")
+        # Set idle_in_transaction_session_timeout to prevent blocking
+        await conn.execute("SET idle_in_transaction_session_timeout = '60s'")
 
     async def disconnect(self):
         """Close connection pool"""

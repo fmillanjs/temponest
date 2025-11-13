@@ -16,14 +16,26 @@ class DatabaseManager:
         self.pool: Optional[asyncpg.Pool] = None
 
     async def connect(self):
-        """Create database connection pool"""
+        """Create database connection pool with optimized settings"""
+        # OPTIMIZED: Tuned connection pool for scheduler service (moderate traffic)
         self.pool = await asyncpg.create_pool(
             settings.database_url,
-            min_size=2,
-            max_size=10,
-            command_timeout=60
+            min_size=5,               # Increased from 2 (keep connections ready)
+            max_size=20,              # Increased from 10 (handle concurrent tasks)
+            max_queries=30000,        # NEW: Recycle connections after 30k queries
+            max_inactive_connection_lifetime=600.0,  # NEW: Close idle connections after 10 min
+            command_timeout=30,       # Reduced from 60 (fail fast)
+            timeout=5.0,              # NEW: Max wait time for connection from pool
+            setup=self._setup_connection  # NEW: Connection setup hook
         )
-        print("✅ Database connection pool created")
+        print("✅ Database connection pool created (pool: 5-20)")
+
+    async def _setup_connection(self, conn):
+        """Setup connection with optimized settings"""
+        # Set statement timeout to prevent long-running queries
+        await conn.execute("SET statement_timeout = '30s'")
+        # Set idle_in_transaction_session_timeout to prevent blocking
+        await conn.execute("SET idle_in_transaction_session_timeout = '60s'")
 
     async def disconnect(self):
         """Close database connection pool"""
