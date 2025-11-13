@@ -5,123 +5,86 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    // Get active jobs (running runs)
-    const activeJobs = await prisma.run.count({
-      where: { status: 'running' },
-    })
+    // OPTIMIZED: Use database view to get all summary metrics in ONE query (was 6+ queries)
+    const [metricsResult] = await prisma.$queryRaw<
+      Array<{
+        active_jobs: bigint;
+        queue_depth: bigint;
+        completed_last_hour: bigint;
+        successful_last_hour: bigint;
+        total_last_hour: bigint;
+        runs_today: bigint;
+        avg_duration_seconds: number | null;
+      }>
+    >`SELECT * FROM v_run_metrics_summary`
 
-    // Get queue depth (pending runs)
-    const queueDepth = await prisma.run.count({
-      where: { status: 'pending' },
-    })
-
-    // Get completed runs from last hour for duration calculation
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
-    const completedRuns = await prisma.run.findMany({
-      where: {
-        status: { in: ['success', 'failed'] },
-        finishedAt: { gte: oneHourAgo },
-      },
-      select: {
-        startedAt: true,
-        finishedAt: true,
-      },
-    })
-
-    // Calculate average duration
-    let avgDuration = 0
-    if (completedRuns.length > 0) {
-      const totalDuration = completedRuns.reduce((acc, run) => {
-        if (run.startedAt && run.finishedAt) {
-          return acc + (run.finishedAt.getTime() - run.startedAt.getTime())
-        }
-        return acc
-      }, 0)
-      avgDuration = totalDuration / completedRuns.length / 1000 // Convert to seconds
+    const metrics = metricsResult || {
+      active_jobs: 0n,
+      queue_depth: 0n,
+      completed_last_hour: 0n,
+      successful_last_hour: 0n,
+      total_last_hour: 0n,
+      runs_today: 0n,
+      avg_duration_seconds: 0,
     }
 
-    // Calculate success rate
-    const totalRuns = await prisma.run.count({
-      where: { finishedAt: { gte: oneHourAgo } },
-    })
-    const successfulRuns = await prisma.run.count({
-      where: {
-        status: 'success',
-        finishedAt: { gte: oneHourAgo },
-      },
-    })
-    const successRate = totalRuns > 0 ? (successfulRuns / totalRuns) * 100 : 0
+    const avgDuration = metrics.avg_duration_seconds || 0
+    const successRate = Number(metrics.total_last_hour) > 0
+      ? (Number(metrics.successful_last_hour) / Number(metrics.total_last_hour)) * 100
+      : 0
 
-    // Get run status distribution
+    // OPTIMIZED: Use database view for status distribution (replaces GROUP BY query)
     const statusDistribution = await prisma.$queryRaw<
-      Array<{ status: string; count: bigint }>
-    >`
-      SELECT status::text, COUNT(*) as count
-      FROM runs
-      WHERE created_at >= NOW() - INTERVAL '24 hours'
-      GROUP BY status
-    `
+      Array<{ status: string; count: bigint; percentage: number }>
+    >`SELECT * FROM v_run_status_distribution_24h`
 
-    // Get runs by agent (from logs)
+    // OPTIMIZED: Use database view for agent metrics (replaces complex CASE query)
     const runsByAgent = await prisma.$queryRaw<
-      Array<{ agent: string; count: bigint }>
-    >`
-      SELECT
-        CASE
-          WHEN step LIKE '%Developer%' THEN 'Developer'
-          WHEN step LIKE '%QA%' THEN 'QA'
-          WHEN step LIKE '%DevOps%' THEN 'DevOps'
-          WHEN step LIKE '%Designer%' THEN 'Designer'
-          WHEN step LIKE '%Security%' THEN 'Security'
-          WHEN step LIKE '%Overseer%' THEN 'Overseer'
-          WHEN step LIKE '%UX%' THEN 'UX'
-          ELSE 'Other'
-        END as agent,
-        COUNT(*) as count
-      FROM runs
-      WHERE created_at >= NOW() - INTERVAL '24 hours'
-      GROUP BY agent
-    `
+      Array<{ agent: string; count: bigint; successful: bigint; failed: bigint; avg_duration_seconds: number | null }>
+    >`SELECT * FROM v_runs_by_agent_24h`
 
-    // Recent errors
-    const recentErrors = await prisma.run.findMany({
-      where: {
-        status: 'failed',
-        finishedAt: { gte: oneHourAgo },
-      },
-      select: {
-        id: true,
-        step: true,
-        finishedAt: true,
-        logs: true,
-      },
-      orderBy: { finishedAt: 'desc' },
-      take: 10,
-    })
+    // OPTIMIZED: Use database view for recent errors (includes project name)
+    const recentErrors = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        project_id: string;
+        project_name: string | null;
+        step: string;
+        finished_at: Date;
+        log_preview: string | null;
+      }>
+    >`SELECT * FROM v_recent_failed_runs LIMIT 10`
 
     return NextResponse.json({
       summary: {
-        activeJobs,
-        queueDepth,
+        activeJobs: Number(metrics.active_jobs),
+        queueDepth: Number(metrics.queue_depth),
         avgDuration: Math.round(avgDuration),
         avgDurationFormatted: formatDuration(avgDuration),
         successRate: Math.round(successRate * 10) / 10,
+        runsToday: Number(metrics.runs_today),
       },
       charts: {
         statusDistribution: statusDistribution.map((row) => ({
           status: row.status,
           count: Number(row.count),
+          percentage: row.percentage,
         })),
         runsByAgent: runsByAgent.map((row) => ({
           agent: row.agent,
           count: Number(row.count),
+          successful: Number(row.successful),
+          failed: Number(row.failed),
+          avgDuration: row.avg_duration_seconds ? Math.round(row.avg_duration_seconds) : 0,
         })),
       },
       recentErrors: recentErrors.map((error) => ({
         id: error.id,
+        projectId: error.project_id,
+        projectName: error.project_name,
         step: error.step,
-        timestamp: error.finishedAt?.toISOString(),
-        preview: error.logs?.substring(0, 200),
+        timestamp: error.finished_at?.toISOString(),
+        preview: error.log_preview,
       })),
     })
   } catch (error) {

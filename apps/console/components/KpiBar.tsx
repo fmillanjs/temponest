@@ -2,28 +2,31 @@ import { TrendingUp, Zap, CheckCircle, Clock, DollarSign } from 'lucide-react'
 import { prisma } from '@/lib/db/client'
 
 export async function KpiBar() {
-  // Fetch real-time metrics from database
-  const [
-    totalProjects,
-    activeProjects,
-    runsToday,
-    queueDepth,
-    healthyAgents,
-    totalAgents
-  ] = await Promise.all([
-    prisma.project.count(),
-    prisma.project.count({ where: { status: { notIn: ['idle'] } } }),
-    prisma.run.count({
-      where: {
-        createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) }
-      }
-    }),
-    prisma.run.count({ where: { status: 'pending' } }),
-    prisma.agent.count({ where: { status: 'healthy' } }),
-    prisma.agent.count()
+  // OPTIMIZED: Use database views for faster queries
+  // Get all metrics in parallel (3 queries instead of 6+)
+  const [projectMetrics, runMetrics, agentHealth] = await Promise.all([
+    // Projects: total and active count
+    prisma.$queryRaw<Array<{ total: bigint; active: bigint }>>`
+      SELECT
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status != 'idle') as active
+      FROM projects
+    `,
+    // Runs: use the optimized metrics view
+    prisma.$queryRaw<Array<{ runs_today: bigint; queue_depth: bigint }>>`
+      SELECT runs_today, queue_depth FROM v_run_metrics_summary
+    `,
+    // Agents: use the health summary view
+    prisma.$queryRaw<Array<{ total_agents: bigint; healthy_count: bigint; health_percentage: number }>>`
+      SELECT * FROM v_agent_health_summary
+    `,
   ])
 
-  const uptime = totalAgents > 0 ? ((healthyAgents / totalAgents) * 100).toFixed(1) : '0.0'
+  const totalProjects = Number(projectMetrics[0]?.total || 0)
+  const activeProjects = Number(projectMetrics[0]?.active || 0)
+  const runsToday = Number(runMetrics[0]?.runs_today || 0)
+  const queueDepth = Number(runMetrics[0]?.queue_depth || 0)
+  const uptime = agentHealth[0]?.health_percentage?.toFixed(1) || '0.0'
 
   const kpis = [
     { label: 'Active Projects', value: activeProjects.toString(), icon: Zap, change: '', trend: 'up' as const },
