@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -54,7 +54,7 @@ export default function ObservabilityPage() {
   const [levelFilter, setLevelFilter] = useState('all')
   const logsEndRef = useRef<HTMLDivElement>(null)
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     try {
       const params = new URLSearchParams()
       if (searchQuery) params.append('search', searchQuery)
@@ -68,9 +68,9 @@ export default function ObservabilityPage() {
     } catch (error) {
       console.error('Failed to fetch logs:', error)
     }
-  }
+  }, [searchQuery, agentFilter, levelFilter])
 
-  const fetchMetrics = async () => {
+  const fetchMetrics = useCallback(async () => {
     try {
       const response = await fetch('/api/observability/metrics')
       const data = await response.json()
@@ -80,12 +80,12 @@ export default function ObservabilityPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     fetchLogs()
     fetchMetrics()
-  }, [searchQuery, agentFilter, levelFilter])
+  }, [fetchLogs, fetchMetrics])
 
   useEffect(() => {
     if (!autoRefresh) return
@@ -96,7 +96,7 @@ export default function ObservabilityPage() {
     }, 5000) // Refresh every 5 seconds
 
     return () => clearInterval(interval)
-  }, [autoRefresh, searchQuery, agentFilter, levelFilter])
+  }, [autoRefresh, fetchLogs, fetchMetrics])
 
   useEffect(() => {
     if (autoScroll && logsEndRef.current) {

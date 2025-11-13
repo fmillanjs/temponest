@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface MonthlyData {
@@ -14,7 +15,7 @@ interface FinancialsChartsProps {
   monthlyData: MonthlyData[]
 }
 
-export function FinancialsCharts({ monthlyData }: FinancialsChartsProps) {
+export const FinancialsCharts = memo(function FinancialsCharts({ monthlyData }: FinancialsChartsProps) {
   return (
     <div className="grid gap-6 md:grid-cols-2">
       {/* Revenue Chart */}
@@ -64,4 +65,4 @@ export function FinancialsCharts({ monthlyData }: FinancialsChartsProps) {
       </div>
     </div>
   )
-}
+})

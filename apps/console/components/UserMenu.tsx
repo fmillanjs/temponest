@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { User, LogOut, Settings, Shield } from "lucide-react";
@@ -13,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export function UserMenu() {
+export const UserMenu = memo(function UserMenu() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const user = session?.user as any;
@@ -97,4 +98,4 @@ export function UserMenu() {
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
+})
