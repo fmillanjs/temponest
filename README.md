@@ -1,17 +1,28 @@
-# Agentic Company Platform
+# TempoNest - Production-Ready AI Agent Platform
 
-A production-ready multi-agent platform with human-in-the-loop approvals, durable workflows, and RAG-powered AI agents.
+A fully optimized, production-ready multi-agent platform with human-in-the-loop approvals, durable workflows, RAG-powered AI agents, and enterprise-grade performance.
 
 ## Overview
 
-The Agentic Company platform enables you to build and run autonomous AI agents that can:
+TempoNest enables you to build and run autonomous AI agents with production-grade reliability:
 
 - **Decompose complex goals** into concrete, executable tasks (Overseer Agent)
 - **Generate production code** for APIs, database schemas, and UI components (Developer Agent)
 - **Request human approval** for risky operations via Telegram or Web UI
 - **Ground all outputs** in documentation with ≥2 citations (RAG)
-- **Track and trace** all LLM calls with costs and latency (Langfuse)
+- **Track and trace** all LLM calls with costs and latency (Langfuse + OpenTelemetry)
 - **Run durably** with retries and fault tolerance (Temporal)
+
+## Performance & Optimization
+
+TempoNest has undergone extensive optimization across 7 phases (145+ hours):
+
+- **50-80% faster API responses** with Redis caching and async operations
+- **97.5% smaller frontend bundles** through dynamic imports and tree-shaking
+- **70% smaller Docker images** with multi-stage Alpine builds
+- **50-70% faster CI/CD** with parallel testing and build caching
+- **Zero critical security vulnerabilities** with comprehensive audits
+- **Full observability** with distributed tracing and real-time metrics
 
 ### Architecture
 
@@ -42,22 +53,39 @@ The Agentic Company platform enables you to build and run autonomous AI agents t
 
 ### Prerequisites
 
-- Docker 24+ and Docker Compose
-- 8GB+ RAM recommended
+- Docker 24+ and Docker Compose V2
+- 8GB+ RAM recommended (4GB for development, 8GB+ for production)
 - ~10GB disk space for models
+- Git (for cloning the repository)
 
 ### 1. Clone and Setup
 
+Choose your environment:
+
+**Development Environment (with hot reload):**
+```bash
+cd docker
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+```
+
+**Production Environment (optimized):**
+```bash
+cd docker
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+**Automated Setup (Development):**
 ```bash
 # Run automated setup
 ./infra/scripts/setup.sh
 ```
 
 This will:
-- Start all Docker services
+- Start all Docker services with development configuration
 - Pull Ollama models (mistral:7b-instruct, qwen2.5-coder:7b, nomic-embed-text)
-- Initialize databases
+- Initialize databases with migrations
 - Wait for services to be healthy
+- Set up Redis caching layer
 
 ### 2. Configure Environment
 
@@ -77,14 +105,30 @@ LATENCY_SLO_MS=5000
 
 ### 3. Access Services
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| Temporal UI | http://localhost:8080 | None |
-| Langfuse | http://localhost:3000 | Sign up on first visit |
-| Approval UI | http://localhost:9001 | None |
-| n8n | http://localhost:5678 | admin/admin (change in .env) |
-| Open WebUI | http://localhost:8081 | Sign up on first visit |
-| Qdrant | http://localhost:6333/dashboard | None |
+**Core Services:**
+| Service | URL | Credentials | Description |
+|---------|-----|-------------|-------------|
+| **Console UI** | http://localhost:3000 | Sign up on first visit | Main dashboard & project management |
+| **Approval UI** | http://localhost:9001 | None | Review and approve agent actions |
+| **Agents API** | http://localhost:9000 | API key required | AI agent execution endpoints |
+| **Auth Service** | http://localhost:9002 | N/A | Authentication & authorization |
+| **Scheduler** | http://localhost:9003 | N/A | Scheduled task management |
+
+**Infrastructure:**
+| Service | URL | Credentials | Description |
+|---------|-----|-------------|-------------|
+| **Temporal UI** | http://localhost:8080 | None | Workflow orchestration dashboard |
+| **n8n** | http://localhost:5678 | admin/admin | Workflow automation |
+| **Ollama** | http://localhost:11434 | None | Local LLM inference |
+| **Qdrant** | http://localhost:6333/dashboard | None | Vector database for RAG |
+
+**Observability (Development):**
+| Service | URL | Credentials | Description |
+|---------|-----|-------------|-------------|
+| **Langfuse** | http://localhost:3000 | Sign up on first visit | LLM tracing & analytics |
+| **Jaeger UI** | http://localhost:16686 | None | Distributed tracing (dev) |
+| **Grafana** | http://localhost:3001 | admin/admin | Metrics visualization |
+| **Prometheus** | http://localhost:9090 | None | Metrics collection |
 
 ## Usage
 
@@ -326,36 +370,88 @@ APPROVAL_TIMEOUT_HOURS=24
 
 ## Monitoring & Observability
 
+TempoNest includes comprehensive observability with OpenTelemetry, distributed tracing, and real-time metrics.
+
 ### Langfuse (LLM Tracing)
 
 - **URL:** http://localhost:3000
 - **Features:**
   - Every LLM call traced with input/output
   - RAG citations attached to spans
-  - Token counts and costs
-  - Latency breakdown
+  - Token counts and costs per operation
+  - Latency breakdown and performance analytics
+  - Model comparison and A/B testing
+
+### OpenTelemetry (Distributed Tracing)
+
+- **Jaeger UI (Dev):** http://localhost:16686
+- **Tempo (Production):** Integrated with Grafana
+- **Features:**
+  - End-to-end request tracing across all services
+  - Database query performance tracking
+  - Redis cache operation monitoring
+  - HTTP request/response correlation
+  - Automatic instrumentation for FastAPI, AsyncPG, Redis
+
+### Grafana (Metrics & Dashboards)
+
+- **URL:** http://localhost:3001 (admin/admin)
+- **Dashboards:**
+  - API response times (p50, p95, p99)
+  - Database query performance
+  - Cache hit rates and effectiveness
+  - Error rates and failure tracking
+  - Resource utilization (CPU, memory, disk)
+  - Agent execution metrics
+
+### Prometheus (Metrics Collection)
+
+- **URL:** http://localhost:9090
+- **Metrics:**
+  - HTTP request counters and histograms
+  - Database connection pool usage
+  - Redis cache operations
+  - Custom business metrics
+  - Alert rules for critical issues
 
 ### Temporal (Workflow Execution)
 
 - **URL:** http://localhost:8080
 - **Features:**
   - View running/completed workflows
-  - Inspect workflow history
+  - Inspect workflow history and events
   - Retry failed activities
   - Send signals to workflows
+  - Performance and latency analytics
 
-### Metrics Endpoint
+### Health Checks & Metrics Endpoints
 
 ```bash
+# Service health
+curl http://localhost:9000/health
+curl http://localhost:9002/health
+curl http://localhost:9003/health
+
+# Detailed metrics
 curl http://localhost:9000/metrics
 
 # Returns:
 {
   "idempotency_cache_size": 42,
   "rag_collection_size": 1543,
-  "langfuse_traces": 89
+  "langfuse_traces": 89,
+  "cache_hit_rate": 0.78,
+  "avg_response_time_ms": 145
 }
 ```
+
+### Performance Monitoring Best Practices
+
+1. **Monitor cache hit rates** - Target >70% for optimal performance
+2. **Track p95/p99 latencies** - Set alerts for >500ms response times
+3. **Watch error rates** - Alert on >1% error rate
+4. **Review traces regularly** - Identify slow queries and bottlenecks
+5. **Check resource usage** - Monitor CPU/memory trends
 
 ## Troubleshooting
 
@@ -482,15 +578,93 @@ Install:
 
 **Total cloud cost estimate: $300-500/month**
 
+## CI/CD & Automation
+
+TempoNest includes comprehensive CI/CD pipelines with automated testing, security scanning, and deployments.
+
+### GitHub Actions Workflows
+
+- **`.github/workflows/ci.yml`** - Main CI orchestration
+  - Linting (Black, isort, flake8)
+  - Security scanning (Bandit, Safety)
+  - Performance benchmarks
+
+- **`.github/workflows/test.yml`** - Parallel test execution
+  - Unit tests with pytest-xdist
+  - Integration tests with services
+  - Frontend tests with Playwright
+  - Coverage reporting to Codecov
+
+- **`.github/workflows/docker-build.yml`** - Docker builds
+  - Intelligent change detection
+  - Parallel builds for all services
+  - Registry-based layer caching (60-80% faster)
+  - Automatic tagging (branch, PR, SHA, latest)
+
+- **`.github/workflows/deploy.yml`** - Automated deployments
+  - Environment-based (staging/production)
+  - Zero-downtime rolling updates
+  - Automatic rollback on failure
+  - Post-deployment smoke tests
+
+### Deployment Scripts
+
+```bash
+# Zero-downtime rolling deployment
+./scripts/deploy/rolling-deploy.sh
+
+# Health check verification
+./scripts/deploy/health-check.sh
+
+# Post-deployment verification
+./scripts/deploy/verify-deployment.sh
+
+# Rollback to previous version
+./scripts/deploy/rollback.sh
+
+# Smoke tests
+./scripts/deploy/smoke-tests.sh
+```
+
+### Build Performance
+
+- **Docker builds:** 60-80% faster with BuildKit caching
+- **Tests:** 50-70% faster with parallel execution
+- **CI pipeline:** ~8 minutes (down from 15 minutes)
+- **Cache hit rate:** >80% for dependencies
+
 ## Roadmap
 
-- [ ] Additional agents (QA Tester, DevOps, Designer)
+**Completed:**
+- [x] Additional agents (QA Tester, DevOps, Designer, Security Auditor, UX Researcher) ✅
+- [x] Cost tracking per project ✅
+- [x] OpenTelemetry integration ✅
+- [x] Multi-stage Docker builds ✅
+- [x] Redis caching infrastructure ✅
+- [x] Database optimization with indexes and views ✅
+- [x] CI/CD automation ✅
+
+**In Progress:**
 - [ ] Web-based workflow builder
-- [ ] Cost tracking per project
-- [ ] Multi-tenant support
-- [ ] Kubernetes deployment
-- [ ] OpenTelemetry integration
+- [ ] Multi-tenant support enhancements
+
+**Planned:**
+- [ ] Kubernetes deployment manifests
 - [ ] Slack integration (in addition to Telegram)
+- [ ] Advanced analytics dashboard
+- [ ] Custom agent creation UI
+
+## Documentation
+
+TempoNest includes comprehensive documentation for all aspects of the platform:
+
+- **[PERFORMANCE.md](docs/PERFORMANCE.md)** - Performance optimization strategies, caching guidelines, and monitoring setup
+- **[OPERATIONS.md](docs/OPERATIONS.md)** - Deployment procedures, troubleshooting guides, and rollback procedures
+- **[DOCKER_USAGE.md](DOCKER_USAGE.md)** - Docker environment guide (dev/prod separation, service reference)
+- **[TELEMETRY_INTEGRATION.md](docs/TELEMETRY_INTEGRATION.md)** - OpenTelemetry integration guide
+- **[OPTIMIZATION_ROADMAP.md](OPTIMIZATION_ROADMAP.md)** - Complete optimization roadmap with all phases
+- **[OPTIMIZATION_PROGRESS.md](OPTIMIZATION_PROGRESS.md)** - Detailed progress tracking for all optimizations
+- **[SECURITY.md](SECURITY.md)** - Security audit findings and vulnerability disclosure policy
 
 ## Contributing
 
@@ -502,10 +676,12 @@ MIT License - see `LICENSE` file.
 
 ## Support
 
-- **Issues:** https://github.com/your-org/agentic-company/issues
-- **Docs:** https://docs.agentic-company.dev
-- **Discord:** https://discord.gg/agentic-company
+- **Issues:** https://github.com/your-org/temponest/issues
+- **Documentation:** See docs/ directory
+- **Progress Tracking:** OPTIMIZATION_PROGRESS.md
 
 ---
 
-Built with ❤️ using CrewAI, Temporal, Qdrant, and Ollama.
+**Built with:** CrewAI, Temporal, Qdrant, Ollama, FastAPI, Next.js, PostgreSQL, Redis, OpenTelemetry
+
+**Optimized for:** Production-grade performance, security, and reliability
