@@ -46,7 +46,6 @@ const nextConfig = {
       '@radix-ui/react-dropdown-menu',
       '@radix-ui/react-select',
       '@radix-ui/react-tabs',
-      '@radix-ui/react-tooltip',
       'recharts',
       'reactflow',
     ],
