@@ -1,0 +1,92 @@
+version: '3.8'
+
+# OpenTelemetry Stack for Observability
+# Use with: docker compose -f docker-compose.yml -f docker-compose.telemetry.yml up
+
+networks:
+  agentic-network:
+    external: true
+
+volumes:
+  jaeger-data:
+  tempo-data:
+
+services:
+  # Jaeger - Distributed Tracing (all-in-one for development)
+  jaeger:
+    image: jaegertracing/all-in-one:1.51
+    container_name: temponest-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC receiver
+      - "4318:4318"    # OTLP HTTP receiver
+      - "14268:14268"  # Jaeger collector
+      - "9411:9411"    # Zipkin compatible endpoint
+    networks:
+      - agentic-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Grafana Tempo - Alternative lightweight tracing backend
+  tempo:
+    image: grafana/tempo:latest
+    container_name: temponest-tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./tempo-config.yaml:/etc/tempo.yaml
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo HTTP
+      - "4318:4318"   # OTLP HTTP (alternative to Jaeger)
+    networks:
+      - agentic-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Grafana - Visualization and Dashboards
+  grafana-observability:
+    image: grafana/grafana:10.2.0
+    container_name: temponest-grafana-observability
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+    ports:
+      - "3001:3000"  # Different port to avoid conflict with existing Grafana
+    networks:
+      - agentic-network
+    depends_on:
+      - jaeger
+      - tempo
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+volumes:
+  grafana-data:
