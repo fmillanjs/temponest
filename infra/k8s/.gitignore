@@ -1,0 +1,17 @@
+# Ignore actual secrets file (use secrets.example.yaml as template)
+secrets.yaml
+
+# Ignore kubeconfig files
+*.kubeconfig
+kubeconfig
+
+# Ignore Terraform state if using Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# Ignore Helm values with secrets
+values-secrets.yaml
+
+# Ignore local development overrides
+kustomization.local.yaml

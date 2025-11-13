@@ -1,0 +1,285 @@
+---
+# Traefik Ingress for API endpoints with automatic load balancing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: temponest-api
+  namespace: temponest
+  annotations:
+    # Traefik annotations
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+
+    # Load balancing configuration
+    traefik.ingress.kubernetes.io/service.loadbalancer.method: "wrr"  # Weighted Round Robin
+    traefik.ingress.kubernetes.io/service.loadbalancer.sticky: "true"  # Session affinity
+    traefik.ingress.kubernetes.io/service.loadbalancer.sticky.cookie.name: "temponest_session"
+    traefik.ingress.kubernetes.io/service.loadbalancer.sticky.cookie.secure: "true"
+
+    # Rate limiting
+    traefik.ingress.kubernetes.io/router.middlewares: temponest-ratelimit@kubernetescrd,temponest-headers@kubernetescrd
+
+    # CORS and security headers
+    traefik.ingress.kubernetes.io/router.middlewares: temponest-headers@kubernetescrd
+
+    # SSL redirect
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    traefik.ingress.kubernetes.io/redirect-permanent: "true"
+
+    # Health check
+    traefik.ingress.kubernetes.io/service.healthcheck.path: /health
+    traefik.ingress.kubernetes.io/service.healthcheck.interval: 10s
+
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - api.temponest.com
+    secretName: temponest-api-tls
+  rules:
+  - host: api.temponest.com
+    http:
+      paths:
+      # Agents API
+      - path: /agents
+        pathType: Prefix
+        backend:
+          service:
+            name: agents
+            port:
+              number: 9000
+      # Approval API
+      - path: /approval
+        pathType: Prefix
+        backend:
+          service:
+            name: approval
+            port:
+              number: 8000
+      # Scheduler API
+      - path: /scheduler
+        pathType: Prefix
+        backend:
+          service:
+            name: scheduler
+            port:
+              number: 9001
+      # API Documentation
+      - path: /docs
+        pathType: Prefix
+        backend:
+          service:
+            name: agents
+            port:
+              number: 9000
+
+---
+# Langfuse Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: temponest-langfuse
+  namespace: temponest
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - langfuse.temponest.com
+    secretName: temponest-langfuse-tls
+  rules:
+  - host: langfuse.temponest.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: langfuse
+            port:
+              number: 3000
+
+---
+# Grafana Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: temponest-grafana
+  namespace: temponest
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - grafana.temponest.com
+    secretName: temponest-grafana-tls
+  rules:
+  - host: grafana.temponest.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana
+            port:
+              number: 3000
+
+---
+# Traefik Middleware: Rate Limiting
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: ratelimit
+  namespace: temponest
+spec:
+  rateLimit:
+    average: 100  # 100 requests per second
+    burst: 200    # Allow bursts up to 200
+    period: 1s    # Per second
+    sourceCriterion:
+      ipStrategy:
+        depth: 1  # Use X-Forwarded-For header
+
+---
+# Traefik Middleware: Security Headers
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: headers
+  namespace: temponest
+spec:
+  headers:
+    # Security headers
+    stsSeconds: 31536000
+    stsIncludeSubdomains: true
+    stsPreload: true
+    forceSTSHeader: true
+    frameDeny: true
+    contentTypeNosniff: true
+    browserXssFilter: true
+    referrerPolicy: "same-origin"
+
+    # CORS
+    accessControlAllowMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+      - OPTIONS
+    accessControlAllowHeaders:
+      - "*"
+    accessControlAllowOriginList:
+      - "https://console.temponest.com"
+      - "https://api.temponest.com"
+    accessControlMaxAge: 100
+    addVaryHeader: true
+
+---
+# Traefik Middleware: Circuit Breaker
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: circuit-breaker
+  namespace: temponest
+spec:
+  circuitBreaker:
+    expression: "NetworkErrorRatio() > 0.30 || ResponseCodeRatio(500, 600, 0, 600) > 0.25"
+    checkPeriod: 10s
+    fallbackDuration: 30s
+    recoveryDuration: 30s
+
+---
+# Traefik Middleware: Request Retry
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: retry
+  namespace: temponest
+spec:
+  retry:
+    attempts: 3
+    initialInterval: 100ms
+
+---
+# Traefik Middleware: Request Compression
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: compress
+  namespace: temponest
+spec:
+  compress:
+    excludedContentTypes:
+      - text/event-stream
+
+---
+# Certificate Issuer (cert-manager)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@temponest.com  # Change to your email
+    privateKeySecretRef:
+      name: letsencrypt-account-key
+    solvers:
+    - http01:
+        ingress:
+          class: traefik
+
+---
+# TLS Certificate for API
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: temponest-api-cert
+  namespace: temponest
+spec:
+  secretName: temponest-api-tls
+  issuerRef:
+    name: letsencrypt
+    kind: ClusterIssuer
+  dnsNames:
+  - api.temponest.com
+  - "*.api.temponest.com"
+
+---
+# TLS Certificate for Langfuse
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: temponest-langfuse-cert
+  namespace: temponest
+spec:
+  secretName: temponest-langfuse-tls
+  issuerRef:
+    name: letsencrypt
+    kind: ClusterIssuer
+  dnsNames:
+  - langfuse.temponest.com
+
+---
+# TLS Certificate for Grafana
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: temponest-grafana-cert
+  namespace: temponest
+spec:
+  secretName: temponest-grafana-tls
+  issuerRef:
+    name: letsencrypt
+    kind: ClusterIssuer
+  dnsNames:
+  - grafana.temponest.com

@@ -1,0 +1,229 @@
+# Traefik Helm Chart Values for Production Load Balancer
+# Install with: helm install traefik traefik/traefik -f traefik-values.yaml -n traefik --create-namespace
+
+# Global Configuration
+globalArguments:
+  - "--global.checknewversion=false"
+  - "--global.sendanonymoususage=false"
+
+# Deployment Configuration
+deployment:
+  enabled: true
+  replicas: 3  # High availability with 3 replicas
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9100"
+
+# Service Configuration
+service:
+  enabled: true
+  type: LoadBalancer  # Creates cloud load balancer (AWS ELB, GCP LB, Azure LB)
+  annotations:
+    # AWS ELB annotations (comment out if not using AWS)
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"  # Network Load Balancer
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+
+    # GCP Load Balancer annotations (uncomment if using GCP)
+    # cloud.google.com/load-balancer-type: "External"
+    # cloud.google.com/neg: '{"ingress": true}'
+
+    # Azure Load Balancer annotations (uncomment if using Azure)
+    # service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+
+# Ports Configuration
+ports:
+  web:
+    port: 80
+    expose: true
+    exposedPort: 80
+    protocol: TCP
+    redirectTo: websecure  # Redirect HTTP to HTTPS
+  websecure:
+    port: 443
+    expose: true
+    exposedPort: 443
+    protocol: TCP
+    tls:
+      enabled: true
+      options: "default"
+      certResolver: "letsencrypt"
+  metrics:
+    port: 9100
+    expose: false
+    protocol: TCP
+
+# TLS Configuration
+tlsOptions:
+  default:
+    minVersion: "VersionTLS12"
+    cipherSuites:
+      - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+      - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+      - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+      - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+
+# Certificate Resolvers
+certResolvers:
+  letsencrypt:
+    acme:
+      email: admin@temponest.com  # Change to your email
+      storage: /data/acme.json
+      caServer: "https://acme-v02.api.letsencrypt.org/directory"
+      httpChallenge:
+        entryPoint: web
+      # DNS challenge (more reliable, use if HTTP challenge fails)
+      # dnsChallenge:
+      #   provider: cloudflare
+      #   resolvers:
+      #     - "1.1.1.1:53"
+      #     - "1.0.0.1:53"
+
+# Persistence for certificates
+persistence:
+  enabled: true
+  name: traefik-certs
+  accessMode: ReadWriteOnce
+  size: 128Mi
+  path: /data
+
+# Autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+# Resources
+resources:
+  requests:
+    cpu: "500m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Affinity (spread across nodes)
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - traefik
+        topologyKey: kubernetes.io/hostname
+
+# Additional Arguments
+additionalArguments:
+  - "--log.level=INFO"
+  - "--accesslog=true"
+  - "--accesslog.filepath=/var/log/traefik/access.log"
+  - "--accesslog.bufferingsize=100"
+  - "--api.dashboard=true"
+  - "--api.insecure=false"
+  - "--entrypoints.web.address=:80"
+  - "--entrypoints.websecure.address=:443"
+  - "--entrypoints.websecure.http.tls=true"
+  - "--providers.kubernetescrd=true"
+  - "--providers.kubernetesingress=true"
+  - "--metrics.prometheus=true"
+  - "--metrics.prometheus.entrypoint=metrics"
+  - "--metrics.prometheus.addServicesLabels=true"
+  - "--tracing.jaeger=false"
+
+  # Load Balancing Configuration
+  - "--serverstransport.insecureskipverify=false"
+  - "--serverstransport.maxidleconnsperhost=200"
+
+  # Health Check Defaults
+  - "--healthcheck.interval=10s"
+  - "--healthcheck.timeout=5s"
+
+  # Circuit Breaker Defaults
+  - "--circuitbreaker.checkperiod=10s"
+
+# Environment Variables
+env:
+  - name: TZ
+    value: "UTC"
+
+# Logs
+logs:
+  general:
+    level: INFO
+  access:
+    enabled: true
+    format: json
+    filters:
+      statusCodes:
+        - "400-599"
+    fields:
+      defaultMode: keep
+      headers:
+        defaultMode: keep
+
+# Metrics
+metrics:
+  prometheus:
+    enabled: true
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    entryPoint: metrics
+
+# Dashboard (protected by basic auth in production)
+ingressRoute:
+  dashboard:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: traefik
+    entryPoints:
+      - websecure
+    # Add basic auth middleware for dashboard access
+    middlewares:
+      - name: dashboard-auth
+
+# Security Context
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+    add:
+      - NET_BIND_SERVICE
+  readOnlyRootFilesystem: true
+  runAsGroup: 65532
+  runAsNonRoot: true
+  runAsUser: 65532
+
+# Priority Class (ensure load balancer pods are scheduled first)
+priorityClassName: system-cluster-critical
+
+# Tolerations (allow scheduling on tainted nodes if needed)
+# tolerations:
+#   - key: "node-role.kubernetes.io/master"
+#     operator: "Exists"
+#     effect: "NoSchedule"
+
+# Node Selector (schedule on specific nodes if needed)
+# nodeSelector:
+#   node-role.kubernetes.io/loadbalancer: "true"

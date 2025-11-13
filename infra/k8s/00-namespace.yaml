@@ -1,0 +1,8 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: temponest
+  labels:
+    name: temponest
+    environment: production

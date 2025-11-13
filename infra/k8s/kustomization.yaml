@@ -1,0 +1,37 @@
+# Kustomize configuration for easy deployment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: temponest
+
+resources:
+  - 00-namespace.yaml
+  - 01-configmaps.yaml
+  - 02-storage.yaml
+  - 03-databases.yaml
+  - 04-services.yaml
+  - 05-deployments.yaml
+  - 06-ingress.yaml
+  - 07-autoscaling.yaml
+  # - secrets.yaml  # Uncomment after creating from secrets.example.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: temponest
+  app.kubernetes.io/managed-by: kustomize
+
+# Common annotations
+commonAnnotations:
+  temponest.com/version: "1.0.0"
+
+# Images to use (override with kustomize edit set image)
+images:
+  - name: temponest/agents
+    newName: your-registry.com/temponest/agents
+    newTag: latest
+  - name: temponest/approval
+    newName: your-registry.com/temponest/approval
+    newTag: latest
+  - name: temponest/scheduler
+    newName: your-registry.com/temponest/scheduler
+    newTag: latest

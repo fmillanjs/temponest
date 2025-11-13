@@ -1,0 +1,165 @@
+---
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: temponest
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+  clusterIP: None  # Headless service for StatefulSet
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: temponest
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+  clusterIP: None
+
+---
+# Qdrant Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant
+  namespace: temponest
+spec:
+  selector:
+    app: qdrant
+  ports:
+  - name: http
+    port: 6333
+    targetPort: 6333
+  - name: grpc
+    port: 6334
+    targetPort: 6334
+
+---
+# Agents Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: agents
+  namespace: temponest
+  labels:
+    app: agents
+spec:
+  selector:
+    app: agents
+  ports:
+  - name: http
+    port: 9000
+    targetPort: 9000
+  type: ClusterIP
+
+---
+# Approval Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: approval
+  namespace: temponest
+  labels:
+    app: approval
+spec:
+  selector:
+    app: approval
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+  type: ClusterIP
+
+---
+# Scheduler Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: scheduler
+  namespace: temponest
+  labels:
+    app: scheduler
+spec:
+  selector:
+    app: scheduler
+  ports:
+  - name: http
+    port: 9001
+    targetPort: 9001
+  type: ClusterIP
+
+---
+# Langfuse Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: langfuse
+  namespace: temponest
+spec:
+  selector:
+    app: langfuse
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+  type: ClusterIP
+
+---
+# Ollama Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  namespace: temponest
+spec:
+  selector:
+    app: ollama
+  ports:
+  - name: http
+    port: 11434
+    targetPort: 11434
+  type: ClusterIP
+
+---
+# Prometheus Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: temponest
+spec:
+  selector:
+    app: prometheus
+  ports:
+  - name: http
+    port: 9090
+    targetPort: 9090
+  type: ClusterIP
+
+---
+# Grafana Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: temponest
+spec:
+  selector:
+    app: grafana
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+  type: ClusterIP

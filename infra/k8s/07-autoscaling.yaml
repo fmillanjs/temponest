@@ -1,0 +1,144 @@
+---
+# HorizontalPodAutoscaler for Agents Service
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: agents-hpa
+  namespace: temponest
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: agents
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+      - type: Pods
+        value: 2
+        periodSeconds: 30
+      selectPolicy: Max
+
+---
+# HorizontalPodAutoscaler for Approval Service
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: approval-hpa
+  namespace: temponest
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: approval
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+# HorizontalPodAutoscaler for Scheduler Service
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: scheduler-hpa
+  namespace: temponest
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: scheduler
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+---
+# PodDisruptionBudget for Agents (ensures availability during updates)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agents-pdb
+  namespace: temponest
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: agents
+
+---
+# PodDisruptionBudget for Approval
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: approval-pdb
+  namespace: temponest
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: approval
+
+---
+# VerticalPodAutoscaler for Ollama (adjusts resource requests)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: ollama-vpa
+  namespace: temponest
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ollama
+  updatePolicy:
+    updateMode: "Auto"  # Automatically apply recommendations
+  resourcePolicy:
+    containerPolicies:
+    - containerName: ollama
+      minAllowed:
+        memory: "4Gi"
+        cpu: "1000m"
+      maxAllowed:
+        memory: "32Gi"
+        cpu: "8000m"
