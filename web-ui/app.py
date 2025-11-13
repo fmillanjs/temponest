@@ -206,7 +206,7 @@ def api_status():
 
         services = {
             "agent_service": f"{BASE_URL}/health",
-            "scheduler_service": f"{BASE_URL.replace(':9000', ':9003')}/health",
+            "scheduler_service": f"{BASE_URL.replace('agents:9000', 'scheduler:9003')}/health",
         }
 
         status = {}
