@@ -80,9 +80,9 @@ def test_api_delete_schedule_not_implemented(client):
     assert "error" in data
 
 
-@pytest.mark.integration
+@pytest.mark.unit  # Changed from integration - this mocks the database
 def test_api_cost_summary_success(client, mock_asyncpg):
-    """Test /api/costs/summary returns cost data"""
+    """Test /api/costs/summary returns cost data (mocked DB)"""
     mock_asyncpg.fetchrow.return_value = {
         'total_usd': Decimal('123.45'),
         'total_tokens': 50000,
@@ -99,9 +99,9 @@ def test_api_cost_summary_success(client, mock_asyncpg):
     assert data['total_executions'] == 100
 
 
-@pytest.mark.integration
+@pytest.mark.unit  # Changed from integration - this mocks the database
 def test_api_cost_summary_with_date_range(client, mock_asyncpg):
-    """Test /api/costs/summary with date range parameters"""
+    """Test /api/costs/summary with date range parameters (mocked DB)"""
     mock_asyncpg.fetchrow.return_value = {
         'total_usd': Decimal('50.00'),
         'total_tokens': 25000,
@@ -116,9 +116,9 @@ def test_api_cost_summary_with_date_range(client, mock_asyncpg):
     assert data['total_tokens'] == 25000
 
 
-@pytest.mark.integration
+@pytest.mark.unit  # Changed from integration - this mocks the database
 def test_api_cost_summary_handles_null_values(client, mock_asyncpg):
-    """Test /api/costs/summary handles null values from database"""
+    """Test /api/costs/summary handles null values from database (mocked DB)"""
     mock_asyncpg.fetchrow.return_value = {
         'total_usd': None,
         'total_tokens': 0,
@@ -133,9 +133,9 @@ def test_api_cost_summary_handles_null_values(client, mock_asyncpg):
     assert 'total_usd' in data
 
 
-@pytest.mark.integration
+@pytest.mark.unit  # Changed from integration - this mocks the database
 def test_api_cost_summary_error_handling(client):
-    """Test /api/costs/summary handles database errors"""
+    """Test /api/costs/summary handles database errors (mocked DB)"""
     with patch('app.get_db_connection', side_effect=Exception("Database error")):
         response = client.get("/api/costs/summary")
         assert response.status_code == 500
@@ -143,9 +143,9 @@ def test_api_cost_summary_error_handling(client):
         assert "error" in data
 
 
-@pytest.mark.integration
+@pytest.mark.unit  # Changed from integration - this mocks external services
 def test_api_status_all_services_healthy(client):
-    """Test /api/status with all services healthy"""
+    """Test /api/status with all services healthy (mocked services)"""
     with patch('requests.get') as mock_get:
         mock_response = Mock()
         mock_response.status_code = 200
@@ -161,9 +161,9 @@ def test_api_status_all_services_healthy(client):
         assert data['scheduler_service']['healthy'] is True
 
 
-@pytest.mark.integration
+@pytest.mark.unit  # Changed from integration - this mocks external services
 def test_api_status_service_unhealthy(client):
-    """Test /api/status with unhealthy services"""
+    """Test /api/status with unhealthy services (mocked services)"""
     with patch('requests.get') as mock_get:
         mock_response = Mock()
         mock_response.status_code = 503
@@ -177,9 +177,9 @@ def test_api_status_service_unhealthy(client):
         assert data['agent_service']['status_code'] == 503
 
 
-@pytest.mark.integration
+@pytest.mark.unit  # Changed from integration - this mocks external services
 def test_api_status_service_timeout(client):
-    """Test /api/status handles service timeouts"""
+    """Test /api/status handles service timeouts (mocked services)"""
     with patch('requests.get', side_effect=Exception("Connection timeout")):
         response = client.get("/api/status")
         assert response.status_code == 200
@@ -189,9 +189,9 @@ def test_api_status_service_timeout(client):
         assert data['agent_service']['status_code'] == 0
 
 
-@pytest.mark.integration
+@pytest.mark.unit  # Changed from integration - this mocks external services
 def test_api_status_error_handling(client):
-    """Test /api/status handles errors gracefully"""
+    """Test /api/status handles errors gracefully (mocked services)"""
     # The api_status function imports requests inside the function,
     # so it will succeed even if there are errors calling the services
     with patch('requests.get', side_effect=Exception("Connection error")):
