@@ -60,6 +60,12 @@ def index():
     return render_template("dashboard.html")
 
 
+@app.route("/favicon.ico")
+def favicon():
+    """Return empty response for favicon to prevent 404"""
+    return "", 204
+
+
 @app.route("/agents")
 def agents_page():
     """Agents management page"""
@@ -146,22 +152,27 @@ def api_delete_schedule(schedule_id):
 def api_cost_summary():
     """Get cost summary from database"""
     try:
-        start_date = request.args.get("start_date")
-        end_date = request.args.get("end_date")
+        start_date_str = request.args.get("start_date")
+        end_date_str = request.args.get("end_date")
 
         async def fetch_costs():
             conn = await get_db_connection()
             try:
                 # Build query based on whether dates are provided
-                if start_date and end_date:
+                if start_date_str and end_date_str:
+                    # Convert string dates to Python date objects for asyncpg
+                    from datetime import date
+                    start_date = date.fromisoformat(start_date_str)
+                    end_date = date.fromisoformat(end_date_str)
+
                     query = """
                         SELECT
                             COALESCE(SUM(total_cost_usd), 0) as total_usd,
                             COALESCE(SUM(total_tokens), 0) as total_tokens,
                             COUNT(*) as total_executions
                         FROM cost_tracking
-                        WHERE created_at::date >= $1::date
-                        AND created_at::date <= $2::date
+                        WHERE created_at::date >= $1
+                        AND created_at::date <= $2
                     """
                     row = await conn.fetchrow(query, start_date, end_date)
                 else:
