@@ -36,8 +36,14 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy application code (preserve directory structure)
 COPY app/ /app/app/
 
+# Copy shared modules
+COPY ../../shared /app/shared
+
 # Create output directory
 RUN mkdir -p /output
+
+# Add shared modules to PYTHONPATH
+ENV PYTHONPATH="/app:${PYTHONPATH}"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

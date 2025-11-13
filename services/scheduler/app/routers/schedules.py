@@ -15,8 +15,7 @@ from models import (
 )
 from db import DatabaseManager
 from scheduler import TaskScheduler
-from auth_middleware import get_current_user
-from auth_client import AuthContext
+from shared.auth import get_current_user, AuthContext
 
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])

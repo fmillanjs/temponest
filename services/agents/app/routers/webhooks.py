@@ -6,8 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from uuid import UUID
 
-from app.auth_client import AuthContext
-from app.auth_middleware import require_permission, require_any_permission
+from shared.auth import AuthContext, require_permission, require_any_permission
 from app.webhooks.models import (
     WebhookCreate,
     WebhookUpdate,

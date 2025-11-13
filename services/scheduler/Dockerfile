@@ -34,6 +34,12 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy application code
 COPY app/ /app/
 
+# Copy shared modules
+COPY ../../shared /app/shared
+
+# Add shared modules to PYTHONPATH
+ENV PYTHONPATH="/app:${PYTHONPATH}"
+
 # Expose port
 EXPOSE 9003
 

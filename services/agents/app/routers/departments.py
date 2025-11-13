@@ -14,11 +14,7 @@ from typing import Dict, Any, List, Optional
 import sys
 import os
 
-# Add parent directory to path to import auth modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from app.auth_client import AuthContext
-from app.auth_middleware import require_permission, require_any_permission
+from shared.auth import AuthContext, require_permission, require_any_permission
 
 router = APIRouter(prefix="/departments", tags=["departments"])
 

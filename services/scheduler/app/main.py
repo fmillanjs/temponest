@@ -15,8 +15,7 @@ from db import DatabaseManager
 from scheduler import TaskScheduler
 from models import SchedulerHealthResponse
 from routers import schedules
-from auth_client import AuthClient
-from auth_middleware import set_auth_client
+from shared.auth import AuthClient, set_auth_client
 
 
 # Global state

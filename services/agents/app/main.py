@@ -26,8 +26,9 @@ from app.memory.rag import RAGMemory
 from app.memory.langfuse_tracer import LangfuseTracer
 from app.departments.manager import DepartmentManager
 from app.routers import departments as departments_router
-from app.auth_client import AuthClient, AuthContext
-from app.auth_middleware import (
+from shared.auth import (
+    AuthClient,
+    AuthContext,
     set_auth_client,
     get_current_user,
     require_permission,
