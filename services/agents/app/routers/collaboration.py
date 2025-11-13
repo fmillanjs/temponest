@@ -12,6 +12,8 @@ from app.collaboration.models import (
     AgentRole
 )
 from app.collaboration.manager import CollaborationManager
+from shared.auth.middleware import get_current_user
+from shared.auth.models import AuthContext
 
 
 router = APIRouter(prefix="/collaboration", tags=["collaboration"])
@@ -24,16 +26,18 @@ def get_collaboration_manager() -> CollaborationManager:
     return collaboration_manager
 
 
-def get_current_tenant_id() -> UUID:
-    """Get current tenant ID from auth context"""
-    # TODO: Extract from JWT token
-    return UUID("00000000-0000-0000-0000-000000000000")
+def get_current_tenant_id(
+    auth_context: AuthContext = Depends(get_current_user)
+) -> UUID:
+    """Get current tenant ID from authenticated user context"""
+    return UUID(auth_context.tenant_id)
 
 
-def get_current_user_id() -> UUID:
-    """Get current user ID from auth context"""
-    # TODO: Extract from JWT token
-    return UUID("00000000-0000-0000-0000-000000000000")
+def get_current_user_id(
+    auth_context: AuthContext = Depends(get_current_user)
+) -> UUID:
+    """Get current user ID from authenticated user context"""
+    return UUID(auth_context.user_id)
 
 
 @router.post("", response_model=CollaborationResponse, status_code=201)

@@ -340,11 +340,18 @@ class CollaborationManager:
         Returns:
             Result dictionary
         """
-        # TODO: Implement actual agent execution
+        # FIXME: Implement actual agent execution (Issue #TBD)
+        # Should instantiate CrewAI agent and execute task
+        # 1. Create agent with role and backstory from AgentRole
+        # 2. Create Task with description and context
+        # 3. Execute agent.execute(task) or agent.run()
+        # 4. Parse and return structured result
+        # See: app/departments/agents/*.py for existing agent implementations
         # For now, return a mock result
+        print(f"⚠️  Mock execution - real CrewAI agent execution not yet implemented")
         return {
             "status": "success",
-            "summary": f"Executed task: {task_description}",
+            "summary": f"[MOCK] Executed task: {task_description}",
             "details": context,
             "refinement_needed": False
         }

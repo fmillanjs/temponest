@@ -296,8 +296,12 @@ class DepartmentManager:
 
             # Check if approval required
             if approval_required:
-                # TODO: Integrate with approval system
-                print(f"      ⚠️  Approval required (not implemented yet)")
+                # FIXME: Integrate with approval system (Issue #TBD)
+                # Should POST to approval service at http://approval:8000/api/approval/request
+                # Request body: { workflow_id, task, agent, risk_level, context }
+                # Then wait for approval via webhook or polling
+                # See: services/approval/app/routers/approval.py for API spec
+                print(f"      ⚠️  Approval required - automatic approval not implemented")
 
             results.append({
                 "step": task,
