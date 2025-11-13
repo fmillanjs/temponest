@@ -14,10 +14,8 @@ import asyncpg
 
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-import tiktoken
 
 from app.settings import settings
 from app.limiter import limiter
@@ -25,7 +23,16 @@ from app.agents.factory import AgentFactory
 from app.memory.rag import RAGMemory
 from app.memory.langfuse_tracer import LangfuseTracer
 from app.departments.manager import DepartmentManager
+from app.models import AgentRequest, AgentResponse
+from app.utils import (
+    count_tokens_async,
+    enforce_budget_async,
+    validate_citations,
+    record_execution_cost
+)
 from app.routers import departments as departments_router
+from app.routers import webhooks as webhooks_router
+from app.routers import health as health_router
 from shared.auth import (
     AuthClient,
     AuthContext,
@@ -37,41 +44,9 @@ from shared.auth import (
 from app.cost.calculator import CostCalculator
 from app.cost.tracker import CostTracker
 from app.webhooks import EventDispatcher, WebhookManager, EventType
-from app.routers import webhooks as webhooks_router
 
 # Import shared Redis client
 from shared.redis import RedisCache
-
-
-# Request/Response Models
-class AgentRequest(BaseModel):
-    """Request to invoke an agent"""
-    task: str = Field(..., description="Task description for the agent")
-    context: Optional[Dict[str, Any]] = Field(default=None, description="Additional context")
-    idempotency_key: Optional[str] = Field(default=None, description="Idempotency key for mutations")
-    risk_level: str = Field(default="low", description="Risk level: low, medium, high")
-    project_id: Optional[str] = Field(default=None, description="Project ID for cost tracking")
-    workflow_id: Optional[str] = Field(default=None, description="Workflow ID for cost tracking")
-
-
-class AgentResponse(BaseModel):
-    """Response from agent invocation"""
-    task_id: str
-    status: str
-    result: Optional[Dict[str, Any]] = None
-    citations: List[Dict[str, Any]] = Field(default_factory=list)
-    tokens_used: int
-    latency_ms: int
-    model_info: Dict[str, Any]
-    cost_info: Optional[Dict[str, Any]] = None  # Cost tracking info
-    error: Optional[str] = None
-
-
-class HealthResponse(BaseModel):
-    """Health check response"""
-    status: str
-    services: Dict[str, str]
-    models: Dict[str, str]
 
 
 # Global state
@@ -337,6 +312,22 @@ async def lifespan(app: FastAPI):
 
     print("✅ Agent Service ready!")
 
+    # Set health router dependencies
+    health_router.set_health_dependencies(
+        cache=cache,
+        rag_memory=rag_memory,
+        langfuse_tracer=langfuse_tracer,
+        db_pool=db_pool,
+        overseer_agent=overseer_agent,
+        developer_agent=developer_agent,
+        qa_tester_agent=qa_tester_agent,
+        devops_agent=devops_agent,
+        designer_agent=designer_agent,
+        security_auditor_agent=security_auditor_agent,
+        ux_researcher_agent=ux_researcher_agent,
+        idempotency_cache=idempotency_cache
+    )
+
     yield
 
     # Shutdown
@@ -386,6 +377,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(health_router.router)
 app.include_router(departments_router.router)
 app.include_router(webhooks_router.router)
 from app.routers import collaboration as collaboration_router
@@ -405,177 +397,6 @@ service_info.info({
 # Mount prometheus metrics endpoint
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
-
-
-# Token counting utility
-def count_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
-    """Count tokens in text using tiktoken (synchronous)"""
-    try:
-        encoding = tiktoken.encoding_for_model(model)
-    except KeyError:
-        encoding = tiktoken.get_encoding("cl100k_base")
-    return len(encoding.encode(text))
-
-
-async def count_tokens_async(text: str, model: str = "gpt-3.5-turbo") -> int:
-    """Count tokens in text using tiktoken (async wrapper)"""
-    return await asyncio.to_thread(count_tokens, text, model)
-
-
-# Guardrail: Budget enforcement
-def enforce_budget(text: str, budget: int = settings.BUDGET_TOKENS_PER_TASK) -> bool:
-    """Check if text fits within token budget"""
-    tokens = count_tokens(text)
-    return tokens <= budget
-
-
-async def enforce_budget_async(text: str, budget: int = settings.BUDGET_TOKENS_PER_TASK) -> bool:
-    """Check if text fits within token budget (async)"""
-    tokens = await count_tokens_async(text)
-    return tokens <= budget
-
-
-# Guardrail: Citation validation
-def validate_citations(citations: List[Dict[str, Any]]) -> bool:
-    """Ensure at least 2 relevant citations"""
-    if len(citations) < 2:
-        return False
-
-    # Check that citations have required fields
-    for citation in citations[:2]:
-        if not all(key in citation for key in ["source", "version", "score"]):
-            return False
-        if citation["score"] < settings.RAG_MIN_SCORE:
-            return False
-
-    return True
-
-
-# Cost tracking helper
-async def record_execution_cost(
-    task_id: str,
-    agent_name: str,
-    user_context: AuthContext,
-    model_provider: str,
-    model_name: str,
-    tokens_used: int,
-    latency_ms: int,
-    status: str = "completed",
-    project_id: Optional[str] = None,
-    workflow_id: Optional[str] = None,
-    citations_count: int = 0
-) -> Optional[Dict[str, Any]]:
-    """Record execution cost and check budgets"""
-    if not cost_tracker:
-        return None
-
-    try:
-        # Estimate input/output split (rough heuristic: 40% input, 60% output)
-        input_tokens = int(tokens_used * 0.4)
-        output_tokens = tokens_used - input_tokens
-
-        # Record execution
-        cost_info = await cost_tracker.record_execution(
-            task_id=task_id,
-            agent_name=agent_name,
-            user_id=user_context.user_id,
-            tenant_id=user_context.tenant_id,
-            model_provider=model_provider,
-            model_name=model_name,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            latency_ms=latency_ms,
-            status=status,
-            project_id=project_id,
-            workflow_id=workflow_id,
-            context={"citations_count": citations_count}
-        )
-
-        return cost_info
-
-    except Exception as e:
-        print(f"Failed to record cost: {e}")
-        return None
-
-
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """
-    Health check endpoint with Redis caching.
-
-    Cache Key: health:agents
-    TTL: 10 seconds
-    """
-    cache_key = "health:agents"
-
-    # Try to get from cache
-    if cache:
-        try:
-            cached_health = await cache.get(cache_key)
-            if cached_health:
-                # Return cached response but still update metrics
-                return HealthResponse(**cached_health)
-        except Exception as e:
-            print(f"Health check cache read error: {e}")
-
-    # Cache miss - check health
-    qdrant_healthy = rag_memory and rag_memory.is_healthy()
-    langfuse_healthy = langfuse_tracer and langfuse_tracer.is_healthy()
-    database_healthy = db_pool is not None
-
-    services = {
-        "qdrant": "healthy" if qdrant_healthy else "unhealthy",
-        "langfuse": "healthy" if langfuse_healthy else "unhealthy",
-        "database": "healthy" if database_healthy else "unhealthy",
-        "cache": "healthy" if cache else "unhealthy",
-        "overseer": "ready" if overseer_agent else "not_initialized",
-        "developer": "ready" if developer_agent else "not_initialized",
-        "qa_tester": "ready" if qa_tester_agent else "not_initialized",
-        "devops": "ready" if devops_agent else "not_initialized",
-        "designer": "ready" if designer_agent else "not_initialized",
-        "security_auditor": "ready" if security_auditor_agent else "not_initialized",
-        "ux_researcher": "ready" if ux_researcher_agent else "not_initialized",
-    }
-
-    # Update Prometheus metrics
-    from app.metrics import MetricsRecorder, db_pool_size
-    MetricsRecorder.update_service_health("qdrant", qdrant_healthy)
-    MetricsRecorder.update_service_health("langfuse", langfuse_healthy)
-    MetricsRecorder.update_service_health("database", database_healthy)
-
-    # Set agent service health (1 if overall healthy)
-    from app.metrics import agent_service_health
-    agent_service_health.set(1.0 if all(v in ["healthy", "ready"] for v in services.values()) else 0.0)
-
-    # Update database pool metrics
-    if db_pool:
-        pool_size = db_pool.get_size()
-        pool_free = db_pool.get_idle_size()
-        pool_in_use = pool_size - pool_free
-        db_pool_size.labels(pool_type="size").set(pool_size)
-        db_pool_size.labels(pool_type="available").set(pool_free)
-        db_pool_size.labels(pool_type="in_use").set(pool_in_use)
-
-    health_response = HealthResponse(
-        status="healthy" if all(v in ["healthy", "ready"] for v in services.values()) else "degraded",
-        services=services,
-        models={
-            "overseer_provider": settings.OVERSEER_PROVIDER,
-            "overseer_model": settings.get_model_for_agent("overseer"),
-            "developer_provider": settings.DEVELOPER_PROVIDER,
-            "developer_model": settings.get_model_for_agent("developer"),
-            "embedding": settings.EMBEDDING_MODEL
-        }
-    )
-
-    # Cache for 10 seconds
-    if cache:
-        try:
-            await cache.set(cache_key, health_response.dict(), ttl=10)
-        except Exception as e:
-            print(f"Health check cache write error: {e}")
-
-    return health_response
 
 
 @app.post("/overseer/run", response_model=AgentResponse)
@@ -753,6 +574,7 @@ async def run_developer(
 
         # Record costs
         cost_info = await record_execution_cost(
+            cost_tracker=cost_tracker,
             task_id=task_id,
             agent_name="developer",
             user_context=current_user,
@@ -820,6 +642,7 @@ async def run_developer(
 
         # Record failed execution cost
         await record_execution_cost(
+            cost_tracker=cost_tracker,
             task_id=task_id,
             agent_name="developer",
             user_context=current_user,
@@ -1337,23 +1160,6 @@ async def run_ux_researcher(
             model_info={"model": settings.get_model_for_agent("developer")},
             error=str(e)
         )
-
-
-@app.get("/api/metrics")
-async def get_api_metrics(
-    current_user: AuthContext = Depends(require_permission("agents:read"))
-):
-    """
-    Get operational metrics (application-level).
-
-    Requires: agents:read permission
-    """
-    return {
-        "idempotency_cache_size": len(idempotency_cache),
-        "rag_collection_size": await rag_memory.get_collection_size() if rag_memory else 0,
-        "langfuse_traces": langfuse_tracer.get_trace_count() if langfuse_tracer else 0,
-        "tenant_id": current_user.tenant_id
-    }
 
 
 if __name__ == "__main__":
