@@ -70,7 +70,9 @@ set -e\n\
 # Setup Claude Code authentication if token is provided\n\
 if [ -n "$CLAUDE_CODE_TOKEN" ]; then\n\
     echo "Setting up Claude Code authentication..."\n\
-    claude setup-token "$CLAUDE_CODE_TOKEN" || echo "Warning: Claude Code auth setup failed"\n\
+    mkdir -p ~/.claude\n\
+    echo "{\"sessionToken\":\"$CLAUDE_CODE_TOKEN\"}" > ~/.claude/config.json\n\
+    echo "Claude Code configured successfully"\n\
 fi\n\
 \n\
 # Start the application\n\
