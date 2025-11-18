@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     # Budget & Guardrails
     BUDGET_TOKENS_PER_TASK: int = 8000
     LATENCY_SLO_MS: int = 5000
+    REQUIRE_CITATIONS: bool = True  # Set to False to disable citation requirements
 
     # Rate Limits
     OVERSEER_CPM: int = 20

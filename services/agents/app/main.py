@@ -443,9 +443,9 @@ async def run_overseer(
             task_id=task_id
         )
 
-        # Validate citations
+        # Validate citations (if required)
         citations = result.get("citations", [])
-        if not validate_citations(citations):
+        if settings.REQUIRE_CITATIONS and not validate_citations(citations):
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient grounding: found {len(citations)} citations, need ≥2 with score ≥{settings.RAG_MIN_SCORE}"
@@ -557,9 +557,9 @@ async def run_developer(
             task_id=task_id
         )
 
-        # Validate citations
+        # Validate citations (if required)
         citations = result.get("citations", [])
-        if not validate_citations(citations):
+        if settings.REQUIRE_CITATIONS and not validate_citations(citations):
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient grounding: found {len(citations)} citations, need ≥2 with score ≥{settings.RAG_MIN_SCORE}"
@@ -729,9 +729,9 @@ async def run_qa_tester(
             task_id=task_id
         )
 
-        # Validate citations
+        # Validate citations (if required)
         citations = result.get("citations", [])
-        if not validate_citations(citations):
+        if settings.REQUIRE_CITATIONS and not validate_citations(citations):
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient grounding: found {len(citations)} citations, need ≥2 with score ≥{settings.RAG_MIN_SCORE}"
@@ -824,9 +824,9 @@ async def run_devops(
             task_id=task_id
         )
 
-        # Validate citations
+        # Validate citations (if required)
         citations = result.get("citations", [])
-        if not validate_citations(citations):
+        if settings.REQUIRE_CITATIONS and not validate_citations(citations):
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient grounding: found {len(citations)} citations, need ≥2 with score ≥{settings.RAG_MIN_SCORE}"
@@ -919,9 +919,9 @@ async def run_designer(
             task_id=task_id
         )
 
-        # Validate citations
+        # Validate citations (if required)
         citations = result.get("citations", [])
-        if not validate_citations(citations):
+        if settings.REQUIRE_CITATIONS and not validate_citations(citations):
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient grounding: found {len(citations)} citations, need ≥2 with score ≥{settings.RAG_MIN_SCORE}"
@@ -1015,9 +1015,9 @@ async def run_security_auditor(
             task_id=task_id
         )
 
-        # Validate citations
+        # Validate citations (if required)
         citations = result.get("citations", [])
-        if not validate_citations(citations):
+        if settings.REQUIRE_CITATIONS and not validate_citations(citations):
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient grounding: found {len(citations)} citations, need ≥2 with score ≥{settings.RAG_MIN_SCORE}"
@@ -1111,9 +1111,9 @@ async def run_ux_researcher(
             task_id=task_id
         )
 
-        # Validate citations
+        # Validate citations (if required)
         citations = result.get("citations", [])
-        if not validate_citations(citations):
+        if settings.REQUIRE_CITATIONS and not validate_citations(citations):
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient grounding: found {len(citations)} citations, need ≥2 with score ≥{settings.RAG_MIN_SCORE}"
