@@ -135,14 +135,15 @@ class RAGMemory:
             ]
             search_filter = Filter(must=conditions)
 
-        # Search
-        results = self.client.search(
+        # Search using query_points (qdrant-client 1.11.0+ with Qdrant v1.10.0+)
+        search_result = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             limit=top_k,
             score_threshold=min_score,
             query_filter=search_filter
         )
+        results = search_result.points
 
         # Format results
         documents = []

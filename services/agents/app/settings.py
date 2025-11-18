@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # Claude Code CLI Configuration (when provider=claude-code)
     CLAUDE_CODE_TOKEN: Optional[str] = None
     CLAUDE_CODE_TIMEOUT: int = 300  # Timeout in seconds for CLI calls
-    CLAUDE_CODE_EXECUTABLE: str = "/usr/local/bin/claude"
+    CLAUDE_CODE_EXECUTABLE: str = "/usr/bin/claude"
     CLAUDE_CODE_OUTPUT_FORMAT: str = "json"
 
     # Model Parameters (apply to all providers)
