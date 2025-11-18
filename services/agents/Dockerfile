@@ -67,12 +67,27 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 RUN echo '#!/bin/bash\n\
 set -e\n\
 \n\
-# Setup Claude Code authentication if token is provided\n\
-if [ -n "$CLAUDE_CODE_TOKEN" ]; then\n\
+# Setup Claude Code authentication if tokens are provided\n\
+if [ -n "$CLAUDE_CODE_ACCESS_TOKEN" ] && [ -n "$CLAUDE_CODE_REFRESH_TOKEN" ]; then\n\
     echo "Setting up Claude Code authentication..."\n\
     mkdir -p ~/.claude\n\
-    echo "{\"sessionToken\":\"$CLAUDE_CODE_TOKEN\"}" > ~/.claude/config.json\n\
+    \n\
+    # Create .credentials.json with proper OAuth structure\n\
+    cat > ~/.claude/.credentials.json <<EOF\n\
+{\n\
+  "claudeAiOauth": {\n\
+    "accessToken": "$CLAUDE_CODE_ACCESS_TOKEN",\n\
+    "refreshToken": "$CLAUDE_CODE_REFRESH_TOKEN",\n\
+    "expiresAt": ${CLAUDE_CODE_EXPIRES_AT:-9999999999999},\n\
+    "scopes": ["user:inference","user:profile","user:sessions:claude_code"],\n\
+    "subscriptionType": "${CLAUDE_CODE_SUBSCRIPTION_TYPE:-max}",\n\
+    "rateLimitTier": "${CLAUDE_CODE_RATE_LIMIT_TIER:-default_claude_max_20x}"\n\
+  }\n\
+}\n\
+EOF\n\
     echo "Claude Code configured successfully"\n\
+elif [ -n "$CLAUDE_CODE_TOKEN" ]; then\n\
+    echo "WARNING: CLAUDE_CODE_TOKEN is deprecated. Please use CLAUDE_CODE_ACCESS_TOKEN and CLAUDE_CODE_REFRESH_TOKEN instead."\n\
 fi\n\
 \n\
 # Start the application\n\

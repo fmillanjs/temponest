@@ -24,30 +24,35 @@ All components for Claude Code CLI integration are now complete and committed to
 
 ## 🚀 How to Use It
 
-### Step 1: Get Your Claude Code Token
+### Step 1: Get Your Claude Code Credentials
 
-**Option A: From Existing Installation**
-```bash
-# If you have Claude Code installed locally
-cat ~/.claude/config.json | jq -r '.sessionToken'
-```
-
-**Option B: Login Manually**
+**Login and Extract Credentials:**
 ```bash
 # Install Claude Code globally (if needed)
 npm install -g @anthropic-ai/claude-code
 
-# Login with your subscription
+# Login with your Claude subscription
 claude login
 
-# Extract token
-cat ~/.claude/config.json | jq -r '.sessionToken'
+# Extract credentials (Claude Code v2.0+)
+cat ~/.claude/.credentials.json | jq -r '.claudeAiOauth.accessToken'
+cat ~/.claude/.credentials.json | jq -r '.claudeAiOauth.refreshToken'
+cat ~/.claude/.credentials.json | jq -r '.claudeAiOauth.expiresAt'
 ```
 
-**Option C: From Claude Code Dashboard**
-- Go to your Claude account settings
-- Navigate to API/Integration section
-- Copy your session token
+**Full credentials file structure:**
+```json
+{
+  "claudeAiOauth": {
+    "accessToken": "sk-ant-oat0-...",
+    "refreshToken": "sk-ant-ort01-...",
+    "expiresAt": 1763477369557,
+    "scopes": ["user:inference","user:profile","user:sessions:claude_code"],
+    "subscriptionType": "max",
+    "rateLimitTier": "default_claude_max_20x"
+  }
+}
+```
 
 ### Step 2: Configure Environment
 
@@ -58,12 +63,16 @@ Edit `/home/doctor/temponest/docker/.env`:
 DEVELOPER_PROVIDER=claude-code
 OVERSEER_PROVIDER=claude-code  # Optional - can keep as ollama
 
-# Add your token
-CLAUDE_CODE_TOKEN=your-token-here
+# Add your credentials (from Step 1)
+CLAUDE_CODE_ACCESS_TOKEN=sk-ant-oat0-your-access-token-here
+CLAUDE_CODE_REFRESH_TOKEN=sk-ant-ort01-your-refresh-token-here
+CLAUDE_CODE_EXPIRES_AT=1763477369557
+CLAUDE_CODE_SUBSCRIPTION_TYPE=max
+CLAUDE_CODE_RATE_LIMIT_TIER=default_claude_max_20x
 
 # Optional: Adjust settings
 CLAUDE_CODE_TIMEOUT=300  # 5 minutes (default)
-CLAUDE_CODE_EXECUTABLE=/usr/local/bin/claude  # Path in container
+CLAUDE_CODE_EXECUTABLE=/usr/bin/claude  # Path in container
 CLAUDE_CODE_OUTPUT_FORMAT=json  # json, text, or markdown
 ```
 
