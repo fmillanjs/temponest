@@ -27,6 +27,7 @@ from app.models import AgentRequest, AgentResponse
 from app.utils import (
     count_tokens_async,
     enforce_budget_async,
+    enforce_budget,
     validate_citations,
     record_execution_cost
 )
