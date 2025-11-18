@@ -11,6 +11,7 @@ Watches a directory for new documents and:
 import os
 import time
 import hashlib
+import uuid
 from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
@@ -218,8 +219,10 @@ class DocumentProcessor:
                 # Generate embedding
                 embedding = await self.generate_embedding(chunk)
 
-                # Create point
-                point_id = f"{doc_hash}-{i}"
+                # Create point with proper UUID
+                # Use UUID v5 for deterministic IDs (namespace + name)
+                namespace = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')  # DNS namespace
+                point_id = str(uuid.uuid5(namespace, f"{doc_hash}-{i}"))
                 point = PointStruct(
                     id=point_id,
                     vector=embedding,
