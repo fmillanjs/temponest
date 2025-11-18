@@ -1,5 +1,5 @@
 """
-Unified LLM Client - supports Ollama, Claude, and OpenAI.
+Unified LLM Client - supports Ollama, Claude, OpenAI, and Claude Code CLI.
 
 Automatically selects the correct provider based on configuration.
 """
@@ -7,6 +7,7 @@ Automatically selects the correct provider based on configuration.
 import httpx
 from typing import Dict, Any, Optional, List, Literal
 from .claude_client import ClaudeClient, ClaudeClientFactory
+from .claude_code_client import ClaudeCodeClient, create_claude_code_client
 
 
 class UnifiedLLMClient:
@@ -25,7 +26,7 @@ class UnifiedLLMClient:
 
     def __init__(
         self,
-        provider: Literal["ollama", "claude", "openai"] = "ollama",
+        provider: Literal["ollama", "claude", "openai", "claude-code"] = "ollama",
         model: str = "mistral:7b-instruct",
         temperature: float = 0.2,
         max_tokens: int = 4096,
@@ -39,7 +40,11 @@ class UnifiedLLMClient:
         claude_api_url: str = "https://api.anthropic.com/v1/messages",
         # OpenAI config
         openai_api_key: Optional[str] = None,
-        openai_base_url: str = "https://api.openai.com/v1"
+        openai_base_url: str = "https://api.openai.com/v1",
+        # Claude Code CLI config
+        claude_code_executable: Optional[str] = None,
+        claude_code_timeout: Optional[int] = None,
+        claude_code_output_format: Optional[str] = None
     ):
         self.provider = provider
         self.model = model
@@ -55,9 +60,13 @@ class UnifiedLLMClient:
         self.claude_api_url = claude_api_url
         self.openai_api_key = openai_api_key
         self.openai_base_url = openai_base_url
+        self.claude_code_executable = claude_code_executable
+        self.claude_code_timeout = claude_code_timeout
+        self.claude_code_output_format = claude_code_output_format
 
         # Initialize provider-specific clients
         self._claude_client: Optional[ClaudeClient] = None
+        self._claude_code_client: Optional[ClaudeCodeClient] = None
         self._initialized = False
 
     async def _ensure_initialized(self):
@@ -79,6 +88,14 @@ class UnifiedLLMClient:
 
             # Authenticate
             await self._claude_client.authenticate()
+
+        elif self.provider == "claude-code":
+            # Initialize Claude Code CLI client
+            self._claude_code_client = create_claude_code_client(
+                executable=self.claude_code_executable,
+                timeout=self.claude_code_timeout,
+                output_format=self.claude_code_output_format
+            )
 
         self._initialized = True
 
@@ -116,6 +133,8 @@ class UnifiedLLMClient:
             return await self._complete_claude(prompt, system, temp, max_tok)
         elif self.provider == "openai":
             return await self._complete_openai(prompt, system, temp, max_tok)
+        elif self.provider == "claude-code":
+            return await self._complete_claude_code(prompt, system, temp, max_tok)
         else:
             raise ValueError(f"Unsupported provider: {self.provider}")
 
@@ -230,6 +249,32 @@ class UnifiedLLMClient:
                 "model": data["model"]
             }
 
+    async def _complete_claude_code(
+        self,
+        prompt: str,
+        system: Optional[str],
+        temperature: float,
+        max_tokens: int
+    ) -> Dict[str, Any]:
+        """Complete using Claude Code CLI"""
+        if not self._claude_code_client:
+            raise ValueError("Claude Code client not initialized")
+
+        # Combine system prompt with user prompt if provided
+        full_prompt = prompt
+        if system:
+            full_prompt = f"System: {system}\n\nUser: {prompt}"
+
+        result = await self._claude_code_client.complete(
+            prompt=full_prompt
+        )
+
+        return {
+            "text": result["text"],
+            "usage": result["usage"],
+            "model": result["model"]
+        }
+
     async def chat(
         self,
         messages: List[Dict[str, str]],
@@ -265,6 +310,14 @@ class UnifiedLLMClient:
                 max_tokens=max_tok,
                 top_p=self.top_p,
                 system=system
+            )
+
+        elif self.provider == "claude-code":
+            if not self._claude_code_client:
+                raise ValueError("Claude Code client not initialized")
+
+            return await self._claude_code_client.chat(
+                messages=messages
             )
 
         elif self.provider == "openai":

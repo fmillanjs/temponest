@@ -32,10 +32,10 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production-min-32-chars-long"  # Must match auth service
 
     # Model Provider Selection
-    # overseer: which provider for Overseer agent (ollama, claude, openai)
-    # developer: which provider for Developer agent (ollama, claude, openai)
-    OVERSEER_PROVIDER: Literal["ollama", "claude", "openai"] = "ollama"
-    DEVELOPER_PROVIDER: Literal["ollama", "claude", "openai"] = "claude"
+    # overseer: which provider for Overseer agent (ollama, claude, openai, claude-code)
+    # developer: which provider for Developer agent (ollama, claude, openai, claude-code)
+    OVERSEER_PROVIDER: Literal["ollama", "claude", "openai", "claude-code"] = "ollama"
+    DEVELOPER_PROVIDER: Literal["ollama", "claude", "openai", "claude-code"] = "claude"
 
     # Ollama Models (when provider=ollama)
     OLLAMA_CHAT_MODEL: str = "mistral:7b-instruct"
@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OPENAI_CHAT_MODEL: str = "gpt-4-turbo-preview"
     OPENAI_CODE_MODEL: str = "gpt-4-turbo-preview"
+
+    # Claude Code CLI Configuration (when provider=claude-code)
+    CLAUDE_CODE_TOKEN: Optional[str] = None
+    CLAUDE_CODE_TIMEOUT: int = 300  # Timeout in seconds for CLI calls
+    CLAUDE_CODE_EXECUTABLE: str = "/usr/local/bin/claude"
+    CLAUDE_CODE_OUTPUT_FORMAT: str = "json"
 
     # Model Parameters (apply to all providers)
     MODEL_TEMPERATURE: float = 0.2
@@ -90,6 +96,8 @@ class Settings(BaseSettings):
                 return self.CLAUDE_CHAT_MODEL
             elif provider == "openai":
                 return self.OPENAI_CHAT_MODEL
+            elif provider == "claude-code":
+                return "claude-code-cli"
         elif agent_type == "developer":
             provider = self.DEVELOPER_PROVIDER
             if provider == "ollama":
@@ -98,6 +106,8 @@ class Settings(BaseSettings):
                 return self.CLAUDE_CODE_MODEL
             elif provider == "openai":
                 return self.OPENAI_CODE_MODEL
+            elif provider == "claude-code":
+                return "claude-code-cli"
 
         # Fallback to ollama
         return self.OLLAMA_CHAT_MODEL if agent_type == "overseer" else self.OLLAMA_CODE_MODEL

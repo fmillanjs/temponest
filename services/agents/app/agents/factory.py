@@ -51,8 +51,8 @@ class AgentFactory:
         provider = settings.DEVELOPER_PROVIDER
         model = settings.get_model_for_agent("developer")
 
-        if provider in ["claude", "openai"]:
-            # Use V2 (direct LLM) for Claude and OpenAI
+        if provider in ["claude", "openai", "claude-code"]:
+            # Use V2 (direct LLM) for Claude, OpenAI, and Claude Code
             return DeveloperAgentV2(
                 rag_memory=rag_memory,
                 tracer=tracer,

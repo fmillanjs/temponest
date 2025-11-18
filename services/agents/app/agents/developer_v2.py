@@ -55,6 +55,18 @@ class DeveloperAgentV2:
                 openai_api_key=settings.OPENAI_API_KEY,
                 openai_base_url=settings.OPENAI_BASE_URL
             )
+        elif provider == "claude-code":
+            self.llm = UnifiedLLMClient(
+                provider="claude-code",
+                model=model,
+                temperature=settings.MODEL_TEMPERATURE,
+                max_tokens=settings.MODEL_MAX_TOKENS,
+                top_p=settings.MODEL_TOP_P,
+                seed=settings.MODEL_SEED,
+                claude_code_executable=settings.CLAUDE_CODE_EXECUTABLE,
+                claude_code_timeout=settings.CLAUDE_CODE_TIMEOUT,
+                claude_code_output_format=settings.CLAUDE_CODE_OUTPUT_FORMAT
+            )
         else:  # ollama
             self.llm = UnifiedLLMClient(
                 provider="ollama",
