@@ -67,26 +67,26 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ROUTE-01 | — | Pending |
-| ROUTE-02 | — | Pending |
-| ROUTE-03 | — | Pending |
-| COLLAB-01 | — | Pending |
-| COLLAB-02 | — | Pending |
-| COLLAB-03 | — | Pending |
-| PIPE-01 | — | Pending |
-| PIPE-02 | — | Pending |
-| PIPE-03 | — | Pending |
-| PIPE-04 | — | Pending |
-| APPR-01 | — | Pending |
-| APPR-02 | — | Pending |
-| RAG-01 | — | Pending |
-| RAG-02 | — | Pending |
+| ROUTE-01 | Phase 1 | Pending |
+| ROUTE-02 | Phase 1 | Pending |
+| ROUTE-03 | Phase 1 | Pending |
+| COLLAB-01 | Phase 2 | Pending |
+| COLLAB-02 | Phase 2 | Pending |
+| COLLAB-03 | Phase 2 | Pending |
+| PIPE-01 | Phase 3 | Pending |
+| PIPE-02 | Phase 3 | Pending |
+| PIPE-03 | Phase 3 | Pending |
+| PIPE-04 | Phase 3 | Pending |
+| APPR-01 | Phase 3 | Pending |
+| APPR-02 | Phase 3 | Pending |
+| RAG-01 | Phase 4 | Pending |
+| RAG-02 | Phase 4 | Pending |
 
 **Coverage:**
 - v0.1 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14 (roadmap pending)
+- Mapped to phases: 14
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-03-05 after initial definition*
+*Last updated: 2026-03-05 — traceability mapped after roadmap creation*
